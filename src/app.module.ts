@@ -1,16 +1,16 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PrismaModule } from './modules-system/prisma/prisma.module';
 import { AuthModule } from './modules-api/auth/auth.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ProtectGuard } from './common/guards/protect.guard';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { ResponseSuccessInterceptor } from './common/interceptors/response-success.interceptor';
 import { TokenModule } from './modules-system/token/token.module';
+import { DatabaseModule } from './modules-system/database/database.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, TokenModule],
+  imports: [DatabaseModule, AuthModule, TokenModule],
   controllers: [AppController],
   providers: [
     AppService,
