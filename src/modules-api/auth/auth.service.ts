@@ -1,72 +1,67 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { LoginBody } from './dto/login.dto';
-import { PrismaService } from 'src/modules-system/prisma/prisma.service';
 import * as bcrypt from "bcrypt";
 import { TokenService } from 'src/modules-system/token/token.service';
 import { RegisterBody } from './dto/register.dto';
 import { Request } from 'express';
+import { InjectModel } from '@nestjs/mongoose';
+import { User } from 'src/modules-system/database/schemas/user.schema';
+import { Model } from 'mongoose';
+import { RefreshToken } from 'src/modules-system/database/schemas/refresh-token.schema';
 @Injectable()
 export class AuthService {
-    constructor(private prisma: PrismaService, private tokenService: TokenService) {}
+    constructor(
+        @InjectModel(User.name) private readonly userModel: Model<User>,
+        @InjectModel(RefreshToken.name) private readonly refreshTokenModel: Model<RefreshToken>, 
+        private readonly tokenService: TokenService
+    ) {}
 
     async register(body: RegisterBody) {
         const { email, password, fullName } = body;
 
         console.log({ email, password, fullName });
 
-        const userExist = await this.prisma.user.findUnique({
-            where: {
-                email: email
-            }
-        });
+        const userExist = await this.userModel.exists({ email: email })
 
         if (userExist) {
             throw new BadRequestException("User existed");
         }
 
-        const hashPassword = bcrypt.hashSync(password, 10);
+        const hashPassword = await bcrypt.hash(password, 10);
 
-        const newUser = await this.prisma.user.create({
-            data: {
-                email: email,
-                passwordHash: hashPassword,
-                fullName: fullName
-            }
+        const newUser = await this.userModel.create({
+            email: email,
+            passwordHash: hashPassword,
+            fullName: fullName
         })
+
+        return true;
     }
 
     async login(body: LoginBody){
         const { email, password } = body;
 
-        const userExist = await this.prisma.user.findUnique({
-            where: {
-                email: email,
-            },
-            omit: {
-                passwordHash: false
-            }
-        })
+        const user = await this.userModel.findOne({ email: email }).select('+passwordHash').exec();
 
-        if (!userExist) {
+        if (!user) {
             throw new BadRequestException("Users have not registered");
         }
 
-        const isPassword = bcrypt.compare(password, userExist.passwordHash);
+        const isPassword = await bcrypt.compare(password, user.passwordHash);
 
         if (!isPassword){
             throw new BadRequestException("invalid password")
         }
 
-        const accessToken = this.tokenService.createAccessToken(userExist.id);
-        const { refreshToken, expiresAt } = this.tokenService.createRefreshToken(userExist.id);
+        const userId = user._id.toString();
+        const accessToken = this.tokenService.createAccessToken(userId);
+        const { refreshToken, expiresAt } = this.tokenService.createRefreshToken(userId);
 
-        await this.prisma.refreshToken.create({
-            data: {
-                token: refreshToken,
-                userId: userExist.id,
-                expiresAt: expiresAt,
-                isRevoked: false,
-            },
+        await this.refreshTokenModel.create({
+            token: refreshToken,
+            userId: user._id,
+            expiresAt: expiresAt,
+            isRevoked: false
         });
 
         return {
@@ -75,13 +70,8 @@ export class AuthService {
         }
     }
 
-    async getUserInfo(userId){
-        const user = await this.prisma.user.findUnique({
-            where: {
-                id: userId
-            }
-        })
-
+    async getUserInfo(userId: string){
+        const user = await this.userModel.findById(userId).exec();
         if (!user) {
             throw new BadRequestException("User does not exist");
         }
@@ -96,25 +86,66 @@ export class AuthService {
 
         if (!refreshToken) throw new BadRequestException("refreshToken does not exist");
 
-        const decodeAccessToken: any = this.tokenService.verifyAccessToken(accessToken, { ignoreExpiration: true });
+        const decodeAccessToken: any = this.tokenService.verifyAccessToken(accessToken, { 
+            ignoreExpiration: true 
+        });
         const decodeRefreshToken: any = this.tokenService.verifyRefreshToken(refreshToken);
 
         if (decodeAccessToken.userId !== decodeRefreshToken.userId) throw new BadRequestException("cannot refresh token");
 
-        const user = await this.prisma.user.findUnique({
-            where: {
-                id: decodeAccessToken.userId
-            }
-        })
+        const tokenRecord = await this.refreshTokenModel.findOne({
+            token: refreshToken,
+            isRevoked: false,
+            expiresAt: { $gt: new Date() },
+        });
+
+        if (!tokenRecord) throw new BadRequestException("refreshToken is invalid");
+
+        const user = await this.userModel.findById(decodeAccessToken.userId).exec();
 
         if (!user) throw new BadRequestException("user does not exist");
 
-        const newAccesstToken = this.tokenService.createAccessToken(user.id);
-        const newRefreshToken = this.tokenService.createRefreshToken(user.id);
+        const userId = user._id.toString();
+        const newAccessToken = this.tokenService.createAccessToken(userId);
+        const { refreshToken: newRefreshToken, expiresAt } = this.tokenService.createRefreshToken(userId);
+
+        tokenRecord.isRevoked = true;
+        await tokenRecord.save();
+
+        await this.refreshTokenModel.create({
+            token: newRefreshToken,
+            userId: user._id,
+            expiresAt,
+            isRevoked: false,
+        });
 
         return {
-            accessToken: newAccesstToken,
+            accessToken: newAccessToken,
             refreshToken: newRefreshToken
         }
+    }
+
+    async logout(req: Request) {
+        const { refreshToken } = req.cookies;
+
+        if (!refreshToken) {
+            throw new BadRequestException('refreshToken does not exist');
+        }
+
+        const tokenRecord = await this.refreshTokenModel.findOne({
+            token: refreshToken,
+            isRevoked: false,
+        });
+
+        if (!tokenRecord) {
+            throw new BadRequestException('refreshToken is invalid or already revoked');
+        }
+
+        tokenRecord.isRevoked = true;
+        await tokenRecord.save();
+
+        return {
+            message: 'Logout successfully',
+        };
     }
 }

@@ -8,9 +8,17 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { ResponseSuccessInterceptor } from './common/interceptors/response-success.interceptor';
 import { TokenModule } from './modules-system/token/token.module';
 import { DatabaseModule } from './modules-system/database/database.module';
+import { MongooseModule } from '@nestjs/mongoose';
+import { User, UserSchema } from './modules-system/database/schemas/user.schema';
 
 @Module({
-  imports: [DatabaseModule, AuthModule, TokenModule],
+  imports: [DatabaseModule,
+     AuthModule,
+     TokenModule,
+     MongooseModule.forFeature([
+      { name: User.name, schema: UserSchema },
+    ]),
+    ],
   controllers: [AppController],
   providers: [
     AppService,

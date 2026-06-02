@@ -1,10 +1,9 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import * as jwt from "jsonwebtoken";
 import { ACCESS_TOKEN_SECRET, REFRESH_TOKEN_SECRET } from "src/common/constants/app.constant";
 import { TokenPayload } from "./token.types";
-import { PrismaService } from "../prisma/prisma.service";
 
-
+@Injectable()
 export class TokenService {
     createAccessToken(userId){
         if (!userId) {

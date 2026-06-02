@@ -4,8 +4,8 @@ import { LoginBody } from './dto/login.dto';
 import type { Request, Response } from 'express';
 import { RegisterBody } from './dto/register.dto';
 import { Public } from 'src/common/decorators/public.decorator';
-import { User } from 'src/common/decorators/user.decorator';
-import type { User as users } from '@prisma/client';
+import { User as CurrentUser } from 'src/common/decorators/user.decorator';
+import type { UserDocument } from 'src/modules-system/database/schemas/user.schema';
 
 @Controller('auth')
 export class AuthController {
@@ -37,7 +37,7 @@ export class AuthController {
 
   @Get("user-info")
   @UseInterceptors(ClassSerializerInterceptor)
-  async getUserInfo(@User() user: users) {
+  async getUserInfo(@CurrentUser() user: UserDocument) {
     return user;
   }
 
@@ -48,5 +48,16 @@ export class AuthController {
     res.cookie('accessToken', result.accessToken);
     res.cookie('refreshToken', result.refreshToken);
     res.json({result});
+  }
+
+  @Post('logout')
+  @Public()
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.logout(req);
+
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+
+    return result;
   }
 }
