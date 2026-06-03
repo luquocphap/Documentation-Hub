@@ -44,13 +44,13 @@ export class AuthService {
         const user = await this.userModel.findOne({ email: email }).select('+passwordHash').exec();
 
         if (!user) {
-            throw new BadRequestException("Users have not registered");
+            throw new BadRequestException("Incorrect email or password. Please try again.");
         }
 
         const isPassword = await bcrypt.compare(password, user.passwordHash);
 
         if (!isPassword){
-            throw new BadRequestException("invalid password")
+            throw new BadRequestException("Incorrect email or password. Please try again.")
         }
 
         const userId = user._id.toString();

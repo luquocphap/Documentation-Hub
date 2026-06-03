@@ -1,7 +1,31 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsNotEmpty } from "class-validator";
-import { IsEmailWhenNotEmpty } from "src/common/decorators/is-email-when-not-empty.decorator";
-import { IsLengthWhenNotEmpty } from "src/common/decorators/is-length-when-not-empty.decorator";
+import {
+    isEmail,
+    IsNotEmpty,
+    Length,
+    registerDecorator,
+    ValidationOptions,
+} from "class-validator";
+
+function IsEmailWhenNotEmpty(validationOptions?: ValidationOptions) {
+    return function (object: object, propertyName: string) {
+        registerDecorator({
+            name: "isEmailWhenNotEmpty",
+            target: object.constructor,
+            propertyName,
+            options: validationOptions,
+            validator: {
+                validate(value: unknown) {
+                    if (value === undefined || value === null || value === "") {
+                        return true;
+                    }
+
+                    return typeof value === "string" && isEmail(value);
+                },
+            },
+        });
+    };
+}
 
 export class RegisterBody {
     @IsNotEmpty({message: "Mandatory field"})
@@ -10,12 +34,12 @@ export class RegisterBody {
          example: "luphap@gmail.com",
          format: "email",
     })
-    @IsEmailWhenNotEmpty({ message: "Invalid Email" })
+    @IsEmailWhenNotEmpty({ message: "Invalid email address" })
     @ApiProperty({ example: "luphap@gmail.com" })
     email!: string;
 
     @IsNotEmpty({message: "Mandatory field"})
-    @IsLengthWhenNotEmpty(8)
+    @Length(8)
     @ApiProperty({ example: "12345678" })
     password!: string;
 
