@@ -24,7 +24,7 @@ export class AuthService {
         const userExist = await this.userModel.exists({ email: email })
 
         if (userExist) {
-            throw new BadRequestException("User existed");
+            throw new BadRequestException("Existing email address");
         }
 
         const hashPassword = await bcrypt.hash(password, 10);
