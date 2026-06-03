@@ -1,4 +1,4 @@
-import { Body, ClassSerializerInterceptor, Controller, Get, Post, Req, Res, UseInterceptors } from '@nestjs/common';
+import { Body, ClassSerializerInterceptor, Controller, Get, Post, Query, Req, Res, UseInterceptors } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginBody } from './dto/login.dto';
 import type { Request, Response } from 'express';
@@ -6,6 +6,7 @@ import { RegisterBody } from './dto/register.dto';
 import { Public } from 'src/common/decorators/public.decorator';
 import { User as CurrentUser } from 'src/common/decorators/user.decorator';
 import type { UserDocument } from 'src/modules-system/database/schemas/user.schema';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -48,6 +49,12 @@ export class AuthController {
     res.cookie('accessToken', result.accessToken);
     res.cookie('refreshToken', result.refreshToken);
     res.json({result});
+  }
+
+  @Get('verify-email')
+  @Public()
+  async verifyEmail(@Query() query: VerifyEmailDto) {
+    return this.authService.verifyEmail(query.token);
   }
 
   @Post('logout')

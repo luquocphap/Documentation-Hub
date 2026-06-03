@@ -10,7 +10,7 @@ export class LoginBody {
          example: "luphap@gmail.com",
          format: "email",
     })
-    @IsEmailWhenNotEmpty({message: "Incorrect email or password. Please try again."})
+    @IsEmailWhenNotEmpty({message: "Invalid email address"})
     email!: string;
 
     @IsNotEmpty({message: "Mandatory field"})

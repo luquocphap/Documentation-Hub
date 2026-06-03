@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, GoneException, Injectable, NotFoundException } from '@nestjs/common';
 import { LoginBody } from './dto/login.dto';
 import * as bcrypt from "bcrypt";
 import { TokenService } from 'src/modules-system/token/token.service';
@@ -8,10 +8,15 @@ import { InjectModel } from '@nestjs/mongoose';
 import { User } from 'src/modules-system/database/schemas/user.schema';
 import { Model } from 'mongoose';
 import { RefreshToken } from 'src/modules-system/database/schemas/refresh-token.schema';
+import { VerificationToken } from 'src/modules-system/database/schemas/verification-token.schema';
+import { sendVerifyEmail } from 'src/common/verify-email/send-verify-email';
+import crypto from "crypto";
+
 @Injectable()
 export class AuthService {
     constructor(
         @InjectModel(User.name) private readonly userModel: Model<User>,
+        @InjectModel(VerificationToken.name) private readonly verificationTokenModel: Model<VerificationToken>,
         @InjectModel(RefreshToken.name) private readonly refreshTokenModel: Model<RefreshToken>, 
         private readonly tokenService: TokenService
     ) {}
@@ -19,7 +24,7 @@ export class AuthService {
     async register(body: RegisterBody) {
         const { email, password, fullName } = body;
 
-        console.log({ email, password, fullName });
+        console.log({ email, fullName });
 
         const userExist = await this.userModel.exists({ email: email })
 
@@ -34,6 +39,22 @@ export class AuthService {
             passwordHash: hashPassword,
             fullName: fullName
         })
+
+        const token = crypto.randomBytes(32).toString('hex'); // 64 ký tự hex
+
+        // Lưu Token, expire time: 1h
+        await this.verificationTokenModel.create({
+            token,
+            userId: newUser._id,
+            expiresAt: new Date(Date.now() + 1 * 60 * 60 * 1000),
+        });
+        
+        // Gửi email xác thực
+        await sendVerifyEmail({
+            to: newUser.email,
+            fullName: newUser.fullName,
+            token,
+        });
 
         return true;
     }
@@ -51,6 +72,11 @@ export class AuthService {
 
         if (!isPassword){
             throw new BadRequestException("Incorrect email or password. Please try again.")
+        }
+
+        // check valid email
+        if (!user.isEmailVerified) {
+            throw new BadRequestException("Email has not been verified");
         }
 
         const userId = user._id.toString();
@@ -123,6 +149,56 @@ export class AuthService {
             accessToken: newAccessToken,
             refreshToken: newRefreshToken
         }
+    }
+
+    async verifyEmail(token: string): Promise<{ message: string }> {
+        const record = await this.verificationTokenModel.findOne({ token });
+    
+        if (!record) {
+            throw new NotFoundException('Verification token không tồn tại.');
+        }
+    
+        //  Kiểm tra đã dùng chưa
+        if (record.isUsed || !record.isValid) {
+            throw new BadRequestException('Token này đã được sử dụng.');
+        }
+    
+        // Kiểm tra hết hạn
+        if (record.expiresAt < new Date()) {
+            // Invalidate token hết hạn
+            await this.verificationTokenModel.updateOne(
+                { _id: record._id },
+                { isValid: false },
+            );
+            // 410 Gone - FE hiện nút "Resend"
+            throw new GoneException('Token đã hết hạn. Vui lòng yêu cầu gửi lại.');
+        }
+    
+        //  Kiểm tra user tồn tại
+        const user = await this.userModel.findById(record.userId);
+    
+        if (!user) {
+            throw new NotFoundException('Người dùng không tồn tại.');
+        }
+    
+        // Đã verify rồi thì không cần làm gì thêm
+        if (user.isEmailVerified) {
+            return { message: 'Email đã được xác thực trước đó.' };
+        }
+    
+        // Cập nhật song song: đánh dấu token đã dùng + verify user
+        await Promise.all([
+            this.verificationTokenModel.updateOne(
+                { _id: record._id },
+                { isUsed: true, isValid: false },
+            ),
+            this.userModel.updateOne(
+                { _id: user._id },
+                { isEmailVerified: true },
+            ),
+        ]);
+    
+        return { message: 'Xác thực email thành công.' };
     }
 
     async logout(req: Request) {
