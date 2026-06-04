@@ -10,6 +10,7 @@ export const REDIS_URL = process.env.REDIS_URL;
 export const RESEND_API_KEY = process.env.RESEND_API_KEY;
 export const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL;
 export const APP_URL = process.env.APP_URL;
+export const NODE_ENV = process.env.NODE_ENV;
 
 
 console.log({

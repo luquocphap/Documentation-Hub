@@ -7,6 +7,7 @@ import { Public } from 'src/common/decorators/public.decorator';
 import { User as CurrentUser } from 'src/common/decorators/user.decorator';
 import type { UserDocument } from 'src/modules-system/database/schemas/user.schema';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { NODE_ENV } from 'src/common/constants/app.constant';
 
 @Controller('auth')
 export class AuthController {
@@ -31,8 +32,18 @@ export class AuthController {
     res: Response
   ){
     const result = await this.authService.login(body);
-    res.cookie("accessToken", result.accessToken);
-    res.cookie("refreshToken", result.refreshToken);
+    res.cookie("accessToken", result.accessToken, {
+      httpOnly: true,
+      secure: NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 1 * 24 * 60 * 60 * 1000
+    });
+    res.cookie("refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 1000
+    });
     return result;
   }
 
@@ -46,8 +57,18 @@ export class AuthController {
   @Public()
   async refreshToken(@Req() req: Request, @Res() res: Response) {
     const result = await this.authService.refreshToken(req);
-    res.cookie('accessToken', result.accessToken);
-    res.cookie('refreshToken', result.refreshToken);
+    res.cookie("accessToken", result.accessToken, {
+      httpOnly: true,
+      secure: NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 1 * 24 * 60 * 60 * 1000
+    });
+    res.cookie("refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 1000
+    });
     res.json({result});
   }
 
