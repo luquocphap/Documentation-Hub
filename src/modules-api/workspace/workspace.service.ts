@@ -79,10 +79,6 @@ export class WorkspaceService {
     return workspacesWithRoles;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} workspace`;
-  }
-
   update(id: number, updateWorkspaceDto: UpdateWorkspaceDto) {
     return `This action updates a #${id} workspace`;
   }

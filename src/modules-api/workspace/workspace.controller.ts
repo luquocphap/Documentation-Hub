@@ -4,6 +4,7 @@ import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { User as CurrentUser } from 'src/common/decorators/user.decorator';
 import type { UserDocument } from 'src/modules-system/database/schemas/user.schema';
+import { Permissions } from 'src/common/decorators/permission.decorator';
 
 @Controller('workspace')
 export class WorkspaceController {
@@ -20,7 +21,8 @@ export class WorkspaceController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateWorkspaceDto: UpdateWorkspaceDto) {
+  @Permissions("UPDATE", "WORKSPACE")
+  update(@Param('workspaceId') id: string, @Body() updateWorkspaceDto: UpdateWorkspaceDto) {
     return this.workspaceService.update(+id, updateWorkspaceDto);
   }
 
