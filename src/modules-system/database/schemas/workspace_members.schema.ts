@@ -1,7 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
-import { Workspace } from './workspace.schema';
-import { Role } from './role.schema';
+import { Workspace } from './workspaces.schema';
+import { User } from './user.schema';
+import { Role } from './roles.schema';
 
 export type WorkspaceMemberDocument = HydratedDocument<WorkspaceMember>;
 
@@ -21,7 +22,7 @@ export class WorkspaceMember {
 
   @Prop({
     type: Types.ObjectId,
-    ref: 'User',           // ref string để tránh circular dependency với User module
+    ref: User.name,
     required: true,
     index: true,
   })
