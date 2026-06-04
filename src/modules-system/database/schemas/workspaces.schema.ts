@@ -18,6 +18,7 @@ export class Workspace {
   name: string;
 
   @Prop({
+    type: String,
     required: false,
     trim: true,
     maxlength: 255,

@@ -24,7 +24,6 @@ export class WorkspaceMember {
     type: Types.ObjectId,
     ref: User.name,
     required: true,
-    index: true,
   })
   userId: Types.ObjectId;
 
