@@ -7,7 +7,6 @@ import { Request } from 'express';
 import { InjectModel } from '@nestjs/mongoose';
 import { User, UserDocument } from 'src/modules-system/database/schemas/user.schema';
 import { Model } from 'mongoose';
-import { RefreshToken } from 'src/modules-system/database/schemas/refresh-token.schema';
 import { VerificationToken } from 'src/modules-system/database/schemas/verification-token.schema';
 import { sendVerifyEmail } from 'src/common/verify-email/send-verify-email';
 import crypto from "crypto";
@@ -18,7 +17,6 @@ export class AuthService {
     constructor(
         @InjectModel(User.name) private readonly userModel: Model<User>,
         @InjectModel(VerificationToken.name) private readonly verificationTokenModel: Model<VerificationToken>,
-        @InjectModel(RefreshToken.name) private readonly refreshTokenModel: Model<RefreshToken>, 
         private readonly redisService: RedisService,
         private readonly tokenService: TokenService
     ) {}
@@ -91,14 +89,6 @@ export class AuthService {
             'EX',
             60,
         );
-
-
-        // await this.refreshTokenModel.create({
-        //     token: refreshToken,
-        //     userId: user._id,
-        //     expiresAt: expiresAt,
-        //     isRevoked: false
-        // });
 
         return {
             accessToken: accessToken,
