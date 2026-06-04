@@ -15,13 +15,8 @@ export class WorkspaceController {
   }
 
   @Get()
-  findAll() {
-    return this.workspaceService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.workspaceService.findOne(+id);
+  async findAll(@CurrentUser() user: UserDocument) {
+    return this.workspaceService.findAll(user);
   }
 
   @Patch(':id')

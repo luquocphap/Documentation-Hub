@@ -19,7 +19,8 @@ export class WorkspaceService {
 
     const newWorkspace = await this.workspaceModel.create({
       name: name,
-      description: description || null
+      description: description || null,
+      memberCount: 1
     });
 
     const workspaceMember = await this.workspaceMemberModel.create({
@@ -28,11 +29,54 @@ export class WorkspaceService {
       roleId: ROLE_IDS.ADMIN_WORKSPACE
     });
 
-    return 'This action adds a new workspace';
+    return true;
   }
 
-  findAll() {
-    return `This action returns all workspace`;
+  async findAll(user: UserDocument) {
+    // Lấy danh sách workspace của user với role name + số lượng members
+    const workspacesWithRoles = await this.workspaceMemberModel
+      .aggregate([
+        // Lọc workspace của user hiện tại
+        { $match: { userId: user._id } },
+
+        // Lookup workspace info
+        {
+          $lookup: {
+            from: 'workspaces',
+            localField: 'workspaceId',
+            foreignField: '_id',
+            as: 'workspace'
+          }
+        },
+        { $unwind: '$workspace' },
+
+        // Lookup role name
+        {
+          $lookup: {
+            from: 'roles',
+            localField: 'roleId',
+            foreignField: '_id',
+            as: 'role'
+          }
+        },
+        { $unwind: '$role' },
+
+        // Chỉ lấy các field cần thiết
+        {
+          $project: {
+            _id: '$workspace._id',
+            workspaceName: '$workspace.name',
+            workspaceDescription: '$workspace.description',
+            createdAt: '$workspace.created_at',
+            userRole: '$role.name',
+            memberCount: '$workspace.memberCount',
+            joinedAt: 1
+          }
+        }
+      ])
+      .exec();
+
+    return workspacesWithRoles;
   }
 
   findOne(id: number) {

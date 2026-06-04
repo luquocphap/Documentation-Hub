@@ -25,6 +25,13 @@ export class Workspace {
     default: null,
   })
   description: string | null;
+
+  @Prop({
+    type: Number,
+    default: 0,
+    min: 0,
+  })
+  memberCount: number;
 }
 
 export const WorkspaceSchema = SchemaFactory.createForClass(Workspace);
