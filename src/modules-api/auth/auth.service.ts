@@ -5,12 +5,13 @@ import { TokenService } from 'src/modules-system/token/token.service';
 import { RegisterBody } from './dto/register.dto';
 import { Request } from 'express';
 import { InjectModel } from '@nestjs/mongoose';
-import { User } from 'src/modules-system/database/schemas/user.schema';
+import { User, UserDocument } from 'src/modules-system/database/schemas/user.schema';
 import { Model } from 'mongoose';
 import { RefreshToken } from 'src/modules-system/database/schemas/refresh-token.schema';
 import { VerificationToken } from 'src/modules-system/database/schemas/verification-token.schema';
 import { sendVerifyEmail } from 'src/common/verify-email/send-verify-email';
 import crypto from "crypto";
+import { RedisService } from 'src/modules-system/redis/redis.service';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +19,7 @@ export class AuthService {
         @InjectModel(User.name) private readonly userModel: Model<User>,
         @InjectModel(VerificationToken.name) private readonly verificationTokenModel: Model<VerificationToken>,
         @InjectModel(RefreshToken.name) private readonly refreshTokenModel: Model<RefreshToken>, 
+        private readonly redisService: RedisService,
         private readonly tokenService: TokenService
     ) {}
 
@@ -59,6 +61,7 @@ export class AuthService {
 
     async login(body: LoginBody){
         const { email, password } = body;
+        const redis = this.redisService.getClient();
 
         const user = await this.userModel.findOne({ email: email }).select('+passwordHash').exec();
 
@@ -81,12 +84,21 @@ export class AuthService {
         const accessToken = this.tokenService.createAccessToken(userId);
         const { refreshToken, expiresAt } = this.tokenService.createRefreshToken(userId);
 
-        await this.refreshTokenModel.create({
-            token: refreshToken,
-            userId: user._id,
-            expiresAt: expiresAt,
-            isRevoked: false
-        });
+        // save refresh token to cache 60s
+        await redis.set(
+            `refresh_token:${userId}`,
+            refreshToken,
+            'EX',
+            60,
+        );
+
+
+        // await this.refreshTokenModel.create({
+        //     token: refreshToken,
+        //     userId: user._id,
+        //     expiresAt: expiresAt,
+        //     isRevoked: false
+        // });
 
         return {
             accessToken: accessToken,
@@ -105,9 +117,9 @@ export class AuthService {
 
     async refreshToken(req: Request){
         const { accessToken, refreshToken } = req.cookies;
+        const redis = this.redisService.getClient();
 
         if (!accessToken) throw new BadRequestException("accessToken does not exist");
-
         if (!refreshToken) throw new BadRequestException("refreshToken does not exist");
 
         const decodeAccessToken: any = this.tokenService.verifyAccessToken(accessToken, { 
@@ -117,11 +129,9 @@ export class AuthService {
 
         if (decodeAccessToken.userId !== decodeRefreshToken.userId) throw new BadRequestException("cannot refresh token");
 
-        const tokenRecord = await this.refreshTokenModel.findOne({
-            token: refreshToken,
-            isRevoked: false,
-            expiresAt: { $gt: new Date() },
-        });
+        const tokenRecord = redis.get(
+            `refresh_token:${decodeRefreshToken.userId}`,
+        )
 
         if (!tokenRecord) throw new BadRequestException("refreshToken is invalid");
 
@@ -132,16 +142,18 @@ export class AuthService {
         const userId = user._id.toString();
         const newAccessToken = this.tokenService.createAccessToken(userId);
         const { refreshToken: newRefreshToken, expiresAt } = this.tokenService.createRefreshToken(userId);
+        
+        // revoke token
+        await redis.del(
+            `refresh_token:${userId}`,
+        );
 
-        tokenRecord.isRevoked = true;
-        await tokenRecord.save();
-
-        await this.refreshTokenModel.create({
-            token: newRefreshToken,
-            userId: user._id,
-            expiresAt,
-            isRevoked: false,
-        });
+        await redis.set(
+            `refresh_token:${userId}`,
+            newAccessToken,
+            'EX',
+            60
+        )
 
         return {
             accessToken: newAccessToken,
@@ -199,24 +211,20 @@ export class AuthService {
         return { message: 'Xác thực email thành công.' };
     }
 
-    async logout(req: Request) {
-        const { refreshToken } = req.cookies;
+    async logout(req: Request, user: UserDocument) {
+        const redis = this.redisService.getClient();
 
-        if (!refreshToken) {
-            throw new BadRequestException('refreshToken does not exist');
+        // Validate user exists
+        if (!user) {
+            throw new BadRequestException('User not found or not authenticated');
         }
 
-        const tokenRecord = await this.refreshTokenModel.findOne({
-            token: refreshToken,
-            isRevoked: false,
-        });
+        const userId = user._id.toString();
 
-        if (!tokenRecord) {
-            throw new BadRequestException('refreshToken is invalid or already revoked');
-        }
-
-        tokenRecord.isRevoked = true;
-        await tokenRecord.save();
+        // Delete refresh token from cache
+        await redis.del(
+            `refresh_token:${userId}`,
+        );
 
         return {
             message: 'Logout successfully',

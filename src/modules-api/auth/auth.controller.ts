@@ -58,9 +58,8 @@ export class AuthController {
   }
 
   @Post('logout')
-  @Public()
-  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.logout(req);
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response, @CurrentUser() user: UserDocument) {
+    const result = await this.authService.logout(req, user);
 
     res.clearCookie('accessToken');
     res.clearCookie('refreshToken');
