@@ -43,7 +43,7 @@ export function buildVerifyEmailHtml(params: {
                   Hi <strong style="color:#0a0a0a;">${fullName}</strong>, thanks for signing up!
                   <br/>
                   Click the button below to verify your email address.
-                  The link expires in <strong style="color:#0a0a0a;">24 hours</strong>.
+                  The link expires in <strong style="color:#0a0a0a;">1 hour</strong>.
                 </td>
               </tr>
 

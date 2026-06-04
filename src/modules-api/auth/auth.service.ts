@@ -24,8 +24,6 @@ export class AuthService {
     async register(body: RegisterBody) {
         const { email, password, fullName } = body;
 
-        console.log({ email, fullName });
-
         const userExist = await this.userModel.exists({ email: email })
 
         if (userExist) {
