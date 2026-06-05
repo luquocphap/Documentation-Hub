@@ -79,7 +79,7 @@ export class WorkspaceService {
     return workspacesWithRoles;
   }
 
-  update(id: number, updateWorkspaceDto: UpdateWorkspaceDto) {
+  update(id: string, updateWorkspaceDto: UpdateWorkspaceDto) {
     return `This action updates a #${id} workspace`;
   }
 

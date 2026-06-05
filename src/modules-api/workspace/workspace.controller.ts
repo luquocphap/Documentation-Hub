@@ -23,7 +23,7 @@ export class WorkspaceController {
   @Patch(':workspaceId')
   @Permissions("EDIT", "WORKSPACE")
   update(@Param('workspaceId') id: string, @Body() updateWorkspaceDto: UpdateWorkspaceDto) {
-    return this.workspaceService.update(+id, updateWorkspaceDto);
+    return this.workspaceService.update(id, updateWorkspaceDto);
   }
 
   @Delete(':id')
