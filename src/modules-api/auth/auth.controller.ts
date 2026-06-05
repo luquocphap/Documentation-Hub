@@ -36,13 +36,12 @@ export class AuthController {
       httpOnly: true,
       secure: NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 1 * 24 * 60 * 60 * 1000
     });
     res.cookie("refreshToken", result.refreshToken, {
       httpOnly: true,
       secure: NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 60 * 1000
+      maxAge: 1 * 24 * 60 * 60 * 1000
     });
     return result;
   }
@@ -61,13 +60,12 @@ export class AuthController {
       httpOnly: true,
       secure: NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 1 * 24 * 60 * 60 * 1000
     });
     res.cookie("refreshToken", result.refreshToken, {
       httpOnly: true,
       secure: NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 60 * 1000
+      maxAge: 1 * 24 * 60 * 60 * 1000
     });
     res.json({result});
   }
@@ -80,13 +78,12 @@ export class AuthController {
       httpOnly: true,
       secure: NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 1 * 24 * 60 * 60 * 1000
     });
     res.cookie("refreshToken", result.refreshToken, {
       httpOnly: true,
       secure: NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 60 * 1000
+      maxAge: 1 * 24 * 60 * 60 * 1000
     });
     return result;
   }

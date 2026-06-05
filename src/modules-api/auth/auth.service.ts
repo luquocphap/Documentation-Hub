@@ -117,6 +117,7 @@ export class AuthService {
         const decodeAccessToken: any = this.tokenService.verifyAccessToken(accessToken, { 
             ignoreExpiration: true 
         });
+        
         const decodeRefreshToken: any = this.tokenService.verifyRefreshToken(refreshToken);
 
         if (decodeAccessToken.userId !== decodeRefreshToken.userId) throw new BadRequestException("cannot refresh token");
