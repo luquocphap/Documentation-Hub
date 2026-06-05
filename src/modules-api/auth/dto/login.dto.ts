@@ -1,13 +1,20 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsEmail, IsNotEmpty } from "class-validator";
+import { IsNotEmpty, isValidationOptions } from "class-validator";
+import { IsEmailWhenNotEmpty } from "src/common/decorators/is-email-when-not-empty.decorator";
+import { IsLengthWhenNotEmpty } from "src/common/decorators/is-length-when-not-empty.decorator";
 
 export class LoginBody {
-    @IsNotEmpty()
-    @ApiProperty({example: "phap@gmail.com"})
-    @IsEmail(undefined, {message: "email error"})
+    @IsNotEmpty({message: "Mandatory field"})
+    @ApiProperty({
+        description: "User email address",
+         example: "luphap@gmail.com",
+         format: "email",
+    })
+    @IsEmailWhenNotEmpty({message: "Invalid email address"})
     email!: string;
 
-    @IsNotEmpty()
+    @IsNotEmpty({message: "Mandatory field"})
+    @IsLengthWhenNotEmpty(8)
     @ApiProperty({example: "123456"})
     password!: string;
 }

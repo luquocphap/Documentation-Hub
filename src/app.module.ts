@@ -10,11 +10,13 @@ import { TokenModule } from './modules-system/token/token.module';
 import { DatabaseModule } from './modules-system/database/database.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { User, UserSchema } from './modules-system/database/schemas/user.schema';
+import { RedisModule } from './modules-system/redis/redis.module';
 
 @Module({
   imports: [DatabaseModule,
      AuthModule,
      TokenModule,
+     RedisModule,
      MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
     ]),

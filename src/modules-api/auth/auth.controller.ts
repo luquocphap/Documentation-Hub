@@ -1,4 +1,4 @@
-import { Body, ClassSerializerInterceptor, Controller, Get, Post, Req, Res, UseInterceptors } from '@nestjs/common';
+import { Body, ClassSerializerInterceptor, Controller, Get, Post, Query, Req, Res, UseInterceptors } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginBody } from './dto/login.dto';
 import type { Request, Response } from 'express';
@@ -6,6 +6,8 @@ import { RegisterBody } from './dto/register.dto';
 import { Public } from 'src/common/decorators/public.decorator';
 import { User as CurrentUser } from 'src/common/decorators/user.decorator';
 import type { UserDocument } from 'src/modules-system/database/schemas/user.schema';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { NODE_ENV } from 'src/common/constants/app.constant';
 
 @Controller('auth')
 export class AuthController {
@@ -30,8 +32,18 @@ export class AuthController {
     res: Response
   ){
     const result = await this.authService.login(body);
-    res.cookie("accessToken", result.accessToken);
-    res.cookie("refreshToken", result.refreshToken);
+    res.cookie("accessToken", result.accessToken, {
+      httpOnly: true,
+      secure: NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 1 * 24 * 60 * 60 * 1000
+    });
+    res.cookie("refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 1000
+    });
     return result;
   }
 
@@ -45,15 +57,30 @@ export class AuthController {
   @Public()
   async refreshToken(@Req() req: Request, @Res() res: Response) {
     const result = await this.authService.refreshToken(req);
-    res.cookie('accessToken', result.accessToken);
-    res.cookie('refreshToken', result.refreshToken);
+    res.cookie("accessToken", result.accessToken, {
+      httpOnly: true,
+      secure: NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 1 * 24 * 60 * 60 * 1000
+    });
+    res.cookie("refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 1000
+    });
     res.json({result});
   }
 
-  @Post('logout')
+  @Get('verify-email')
   @Public()
-  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.logout(req);
+  async verifyEmail(@Query() query: VerifyEmailDto) {
+    return this.authService.verifyEmail(query.token);
+  }
+
+  @Post('logout')
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response, @CurrentUser() user: UserDocument) {
+    const result = await this.authService.logout(req, user);
 
     res.clearCookie('accessToken');
     res.clearCookie('refreshToken');

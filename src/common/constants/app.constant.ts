@@ -7,6 +7,10 @@ export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 export const CLOUDINARY_FOLDER = process.env.CLOUDINARY_FOLDER;
 export const REDIS_URL = process.env.REDIS_URL;
+export const RESEND_API_KEY = process.env.RESEND_API_KEY;
+export const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL;
+export const APP_URL = process.env.APP_URL;
+export const NODE_ENV = process.env.NODE_ENV;
 
 
 console.log({
@@ -17,5 +21,8 @@ console.log({
     CLOUDINARY_API_KEY: CLOUDINARY_API_KEY,
     CLOUDINARY_API_SECRET: CLOUDINARY_API_SECRET,
     CLOUDINARY_FOLDER: CLOUDINARY_FOLDER,
-    REDIS_URL: REDIS_URL
+    REDIS_URL: REDIS_URL,
+    RESEND_API_KEY: RESEND_API_KEY,
+    RESEND_FROM_EMAIL: RESEND_FROM_EMAIL,
+    APP_URL: APP_URL
 })
