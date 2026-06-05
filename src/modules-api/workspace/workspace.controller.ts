@@ -21,7 +21,7 @@ export class WorkspaceController {
   }
 
   @Patch(':workspaceId')
-  @Permissions("UPDATE", "WORKSPACE")
+  @Permissions("EDIT", "WORKSPACE")
   update(@Param('workspaceId') id: string, @Body() updateWorkspaceDto: UpdateWorkspaceDto) {
     return this.workspaceService.update(+id, updateWorkspaceDto);
   }

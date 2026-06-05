@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Permission, Role, RoleDocument } from 'src/modules-system/database/schemas/roles.schema';
 import { WorkspaceMember } from 'src/modules-system/database/schemas/workspace_members.schema';
 import { PERMISSION_KEY } from '../decorators/permission.decorator';
@@ -32,36 +32,31 @@ export class PermissionGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-
-    
     
     const workspaceId = request.params.workspaceId;
-    console.log({user, workspaceId});
-
     if (!user || !workspaceId) {
       throw new ForbiddenException('Không thể xác thực ngữ cảnh Workspace hoặc User');
     }
 
     const member = await this.memberModel.findOne({
-      userId: user._id,
-      workspaceId: workspaceId,
+      userId: new Types.ObjectId(user._id),
+      workspaceId: new Types.ObjectId(workspaceId as string),
     }).exec();
 
-    console.log({member});
 
     if (!member) {
       throw new ForbiddenException('Bạn không phải là thành viên của Workspace này');
     }
 
     const role = await this.roleModel.findById(member.roleId).exec();
+
     if (!role) {
       throw new ForbiddenException('Role không tồn tại');
     }
 
     const hasPermission = role.permissions.some(
-      (p) => 
-        p.action === requiredPermission.action && 
-        p.resource === requiredPermission.resource
+      (p) => p.action === requiredPermission[0] && 
+        p.resource === requiredPermission[1]
     );
 
     if (!hasPermission) {
