@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { InjectModel } from '@nestjs/mongoose';
@@ -79,11 +79,24 @@ export class WorkspaceService {
     return workspacesWithRoles;
   }
 
-  update(id: string, updateWorkspaceDto: UpdateWorkspaceDto) {
-    return `This action updates a #${id} workspace`;
+  async update(id: string, updateWorkspaceDto: UpdateWorkspaceDto) {
+    const { name, description } = updateWorkspaceDto;
+    
+    // Tự động cập nhật updatedAt
+    const updatedWorkspace = await this.workspaceModel.findByIdAndUpdate(
+      id,
+      { name, description },
+      { new: true } // trả về workspace mới
+    ).exec();
+
+    if (!updatedWorkspace || updatedWorkspace.isDeleted) {
+      throw new NotFoundException('Workspace không tồn tại hoặc đã bị xóa');
+    }
+
+    return updatedWorkspace;
   }
 
-  remove(id: number) {
+  remove(id: string, user: UserDocument) {
     return `This action removes a #${id} workspace`;
   }
 }

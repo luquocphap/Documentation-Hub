@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
+import { User } from 'src/common/decorators/user.decorator';
 
 export type WorkspaceDocument = HydratedDocument<Workspace>;
 
@@ -32,6 +33,15 @@ export class Workspace {
     min: 0,
   })
   memberCount: number;
+
+  @Prop({ default: false })
+  isDeleted: boolean;
+
+  @Prop({ type: Date, default: null })
+  deletedAt: Date | null;
+
+  @Prop({ type: Types.ObjectId, ref: User.name, default: null })
+  deletedBy: Types.ObjectId | null;
 }
 
 export const WorkspaceSchema = SchemaFactory.createForClass(Workspace);

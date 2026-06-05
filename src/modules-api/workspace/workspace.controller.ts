@@ -27,7 +27,8 @@ export class WorkspaceController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.workspaceService.remove(+id);
+  @Permissions("DELETE", "WORKSPACE")
+  remove(@Param('id') id: string, @CurrentUser() user: UserDocument) {
+    return this.workspaceService.remove(id, user); 
   }
 }
