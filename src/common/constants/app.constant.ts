@@ -12,7 +12,6 @@ export const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL;
 export const APP_URL = process.env.APP_URL;
 export const NODE_ENV = process.env.NODE_ENV;
 
-
 console.log({
     DATABASE_URL: DATABASE_URL,
     ACCESS_TOKEN_SECRET: ACCESS_TOKEN_SECRET,
