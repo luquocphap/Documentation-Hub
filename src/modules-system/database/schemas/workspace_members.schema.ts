@@ -39,6 +39,15 @@ export class WorkspaceMember {
     default: () => new Date(),
   })
   joinedAt: Date;
+
+  @Prop({ default: false })
+  isDeleted: boolean;
+
+  @Prop({ type: Date, default: null })
+  deletedAt: Date | null;
+
+  @Prop({ type: Types.ObjectId, ref: User.name, default: null })
+  deletedBy: Types.ObjectId | null;
 }
 
 export const WorkspaceMemberSchema = SchemaFactory.createForClass(WorkspaceMember);

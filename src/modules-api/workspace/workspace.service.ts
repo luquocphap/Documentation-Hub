@@ -3,10 +3,11 @@ import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Workspace } from 'src/modules-system/database/schemas/workspaces.schema';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { WorkspaceMember } from 'src/modules-system/database/schemas/workspace_members.schema';
 import type { UserDocument } from 'src/modules-system/database/schemas/user.schema';
 import { ROLE_IDS } from 'src/common/seeds/role.seed';
+import { Type } from 'class-transformer';
 
 @Injectable()
 export class WorkspaceService {
@@ -37,7 +38,12 @@ export class WorkspaceService {
     const workspacesWithRoles = await this.workspaceMemberModel
       .aggregate([
         // Lọc workspace của user hiện tại
-        { $match: { userId: user._id } },
+        { 
+          $match: { 
+            userId: user._id,
+            isDeleted: { $ne: true } // theo cơ chế soft delete
+          } 
+        },
 
         // Lookup workspace info
         {
@@ -96,7 +102,36 @@ export class WorkspaceService {
     return updatedWorkspace;
   }
 
-  remove(id: string, user: UserDocument) {
-    return `This action removes a #${id} workspace`;
+  async remove(id: string, user: UserDocument) {
+    // Xóa mềm Workspace
+    const deletedWorkspace = await this.workspaceModel.findByIdAndUpdate(
+      id,
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: user._id,
+      },
+      { new: true }
+    ).exec();
+
+    if (!deletedWorkspace) {
+      throw new NotFoundException('Workspace không tồn tại');
+    }
+
+    // Xóa mềm toàn bộ quan hệ Member-Workspace
+    await this.workspaceMemberModel.updateMany(
+      {
+        workspaceId: new Types.ObjectId(id),
+      },
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletedBy: user._id 
+        }
+      }
+    ).exec();
+
+    return { message: 'Xóa workspace thành công' };
   }
 }
