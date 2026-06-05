@@ -14,6 +14,8 @@ import { RedisModule } from './modules-system/redis/redis.module';
 import { Role, RoleSchema } from './modules-system/database/schemas/roles.schema';
 import { WorkspaceModule } from './modules-api/workspace/workspace.module';
 import { RoleSeeder } from './common/seeds/role.seed';
+import { PermissionGuard } from './common/guards/permission.guard';
+import { WorkspaceMember, WorkspaceMemberSchema } from './modules-system/database/schemas/workspace_members.schema';
 
 @Module({
   imports: [DatabaseModule,
@@ -24,6 +26,7 @@ import { RoleSeeder } from './common/seeds/role.seed';
      MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Role.name, schema: RoleSchema },
+      { name: WorkspaceMember.name, schema: WorkspaceMemberSchema }
     ]),
      WorkspaceModule,
     ],
@@ -34,6 +37,10 @@ import { RoleSeeder } from './common/seeds/role.seed';
     {
       provide: APP_GUARD,
       useClass: ProtectGuard
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PermissionGuard
     },
     {
       provide: APP_INTERCEPTOR,

@@ -20,7 +20,7 @@ export class WorkspaceController {
     return this.workspaceService.findAll(user);
   }
 
-  @Patch(':id')
+  @Patch(':workspaceId')
   @Permissions("UPDATE", "WORKSPACE")
   update(@Param('workspaceId') id: string, @Body() updateWorkspaceDto: UpdateWorkspaceDto) {
     return this.workspaceService.update(+id, updateWorkspaceDto);

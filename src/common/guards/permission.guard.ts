@@ -16,7 +16,7 @@ export class PermissionGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
     @InjectModel(Role.name) private roleModel: Model<RoleDocument>,
-    @InjectModel('WorkspaceMember') private memberModel: Model<WorkspaceMember>, 
+    @InjectModel(WorkspaceMember.name) private memberModel: Model<WorkspaceMember>, 
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -32,8 +32,11 @@ export class PermissionGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const user = request.user;
+
+    
     
     const workspaceId = request.params.workspaceId;
+    console.log({user, workspaceId});
 
     if (!user || !workspaceId) {
       throw new ForbiddenException('Không thể xác thực ngữ cảnh Workspace hoặc User');
@@ -43,6 +46,8 @@ export class PermissionGuard implements CanActivate {
       userId: user._id,
       workspaceId: workspaceId,
     }).exec();
+
+    console.log({member});
 
     if (!member) {
       throw new ForbiddenException('Bạn không phải là thành viên của Workspace này');

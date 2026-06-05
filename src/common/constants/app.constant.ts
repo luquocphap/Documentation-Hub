@@ -11,6 +11,7 @@ export const RESEND_API_KEY = process.env.RESEND_API_KEY;
 export const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL;
 export const APP_URL = process.env.APP_URL;
 export const NODE_ENV = process.env.NODE_ENV;
+export const APP_URL = process.env.APP_URL;
 
 
 console.log({
@@ -22,7 +23,10 @@ console.log({
     CLOUDINARY_API_SECRET: CLOUDINARY_API_SECRET,
     CLOUDINARY_FOLDER: CLOUDINARY_FOLDER,
     REDIS_URL: REDIS_URL,
+<<<<<<< HEAD
     RESEND_API_KEY: RESEND_API_KEY,
     RESEND_FROM_EMAIL: RESEND_FROM_EMAIL,
+=======
+>>>>>>> 9689890 (feat: setup permission for api update workspace)
     APP_URL: APP_URL
 })
