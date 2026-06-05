@@ -74,8 +74,21 @@ export class AuthController {
 
   @Get('verify-email')
   @Public()
-  async verifyEmail(@Query() query: VerifyEmailDto) {
-    return this.authService.verifyEmail(query.token);
+  async verifyEmail(@Query() query: VerifyEmailDto, @Res() res: Response) {
+    const result = await this.authService.verifyEmail(query.token)
+    res.cookie("accessToken", result.accessToken, {
+      httpOnly: true,
+      secure: NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 1 * 24 * 60 * 60 * 1000
+    });
+    res.cookie("refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 1000
+    });
+    return result;
   }
 
   @Post('logout')
