@@ -5,6 +5,7 @@ import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { User as CurrentUser } from 'src/common/decorators/user.decorator';
 import type { UserDocument } from 'src/modules-system/database/schemas/user.schema';
 import { Permissions } from 'src/common/decorators/permission.decorator';
+import { InviteMemberDto } from './dto/invite-memer.dto';
 
 @Controller('workspace')
 export class WorkspaceController {
@@ -30,5 +31,15 @@ export class WorkspaceController {
   @Permissions("DELETE", "WORKSPACE")
   remove(@Param('workspaceId') id: string, @CurrentUser() user: UserDocument) {
     return this.workspaceService.remove(id, user); 
+  }
+
+  @Post(':workspaceId/invite')
+  @Permissions("INVITE", "MEMBER")
+  inviteMember(
+    @Param('workspaceId') workspaceId: string,
+    @Body() inviteMemberDto: InviteMemberDto,
+    @CurrentUser() user: UserDocument
+  ) {
+    return this.workspaceService.inviteMember(workspaceId, inviteMemberDto, user);
   }
 }

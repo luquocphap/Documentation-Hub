@@ -1,9 +1,10 @@
-export function buildVerifyEmailHtml(params: {
+export function buildWorkspaceInvitationEmailHtml(params: {
   workspaceName: string;
   inviterName: string;
   roleName: string;
+  actionUrl: string;
 }): string {
-  const { workspaceName, inviterName, roleName } = params;
+  const { workspaceName, inviterName, roleName, actionUrl } = params;
 
   return `
   <!DOCTYPE html>
@@ -99,16 +100,16 @@ export function buildVerifyEmailHtml(params: {
                 
                 <div class="highlight-box">
                     <ul>
-                        <li><strong>Workspace:</strong> {{workspaceName}}</li>
-                        <li><strong>Người mời:</strong> {{inviterName}}</li>
-                        <li><strong>Vai trò của bạn:</strong> {{roleName}}</li>
+                        <li><strong>Workspace:</strong> ${workspaceName}</li>
+                        <li><strong>Người mời:</strong> ${inviterName}</li>
+                        <li><strong>Vai trò của bạn:</strong> ${roleName}</li>
                     </ul>
                 </div>
                 
                 <p>Vui lòng nhấn vào liên kết bên dưới để xác nhận lời mời và truy cập không gian làm việc của nhóm:</p>
                 
                 <div class="button-wrapper">
-                    <a href="{{actionUrl}}" class="btn-action" target="_blank">Chấp Nhận Lời Mời</a>
+                    <a href="${actionUrl}" class="btn-action" target="_blank">Chấp Nhận Lời Mời</a>
                 </div>
                 
                 <p style="font-size: 13px; color: #64748b;">Lưu ý: Lời mời này có giá trị trong vòng 7 ngày kể từ ngày gửi. Nếu bạn không quen biết người mời, vui lòng bỏ qua email này.</p>

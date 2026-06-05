@@ -16,9 +16,12 @@ import { WorkspaceModule } from './modules-api/workspace/workspace.module';
 import { RoleSeeder } from './common/seeds/role.seed';
 import { PermissionGuard } from './common/guards/permission.guard';
 import { WorkspaceMember, WorkspaceMemberSchema } from './modules-system/database/schemas/workspace_members.schema';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 
 @Module({
-  imports: [DatabaseModule,
+  imports: [
+     EventEmitterModule.forRoot(),
+     DatabaseModule,
      AuthModule,
      WorkspaceModule,
      TokenModule,

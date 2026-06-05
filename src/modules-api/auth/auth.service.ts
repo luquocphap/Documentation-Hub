@@ -11,6 +11,7 @@ import { VerificationToken } from 'src/modules-system/database/schemas/verificat
 import { sendVerifyEmail } from 'src/common/verify-email/send-verify-email';
 import crypto from "crypto";
 import { RedisService } from 'src/modules-system/redis/redis.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class AuthService {
@@ -18,7 +19,8 @@ export class AuthService {
         @InjectModel(User.name) private readonly userModel: Model<User>,
         @InjectModel(VerificationToken.name) private readonly verificationTokenModel: Model<VerificationToken>,
         private readonly redisService: RedisService,
-        private readonly tokenService: TokenService
+        private readonly tokenService: TokenService,
+        private eventEmitter: EventEmitter2
     ) {}
 
     async register(body: RegisterBody) {
@@ -197,6 +199,11 @@ export class AuthService {
                 { isEmailVerified: true },
             ),
         ]);
+
+        this.eventEmitter.emit('user.email.verified', {
+            email: user.email,
+            userId: user._id.toString()
+        });
     
         return { message: 'Xác thực email thành công.' };
     }
