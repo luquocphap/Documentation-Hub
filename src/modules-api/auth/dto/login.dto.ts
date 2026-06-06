@@ -14,7 +14,6 @@ export class LoginBody {
     email!: string;
 
     @IsNotEmpty({message: "Mandatory field"})
-    @IsLengthWhenNotEmpty(8)
     @ApiProperty({example: "123456"})
     password!: string;
 }
