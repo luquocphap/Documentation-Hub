@@ -117,6 +117,7 @@ export class AuthService {
         const decodeAccessToken: any = this.tokenService.verifyAccessToken(accessToken, { 
             ignoreExpiration: true 
         });
+        
         const decodeRefreshToken: any = this.tokenService.verifyRefreshToken(refreshToken);
 
         if (decodeAccessToken.userId !== decodeRefreshToken.userId) throw new BadRequestException("cannot refresh token");
@@ -153,8 +154,9 @@ export class AuthService {
         }
     }
 
-    async verifyEmail(token: string): Promise<{ message: string }> {
+    async verifyEmail(token: string) {
         const record = await this.verificationTokenModel.findOne({ token });
+        const redis = this.redisService.getClient();
     
         if (!record) {
             throw new NotFoundException('Verification token không tồn tại.');
@@ -187,6 +189,19 @@ export class AuthService {
         if (user.isEmailVerified) {
             return { message: 'Email đã được xác thực trước đó.' };
         }
+
+        // AUTO-LOGIN
+        const userId = user._id.toString();
+        const accessToken = this.tokenService.createAccessToken(userId);
+        const { refreshToken, expiresAt } = this.tokenService.createRefreshToken(userId);
+
+        // save refresh token to cache 60s
+        await redis.set(
+            `refresh_token:${userId}`,
+            refreshToken,
+            'EX',
+            60,
+        );
     
         // Cập nhật song song: đánh dấu token đã dùng + verify user
         await Promise.all([
@@ -205,7 +220,11 @@ export class AuthService {
             userId: user._id.toString()
         });
     
-        return { message: 'Xác thực email thành công.' };
+        return { 
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            message: 'Xác thực email thành công.' 
+        };
     }
 
     async logout(req: Request, user: UserDocument) {

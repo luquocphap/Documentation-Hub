@@ -18,7 +18,7 @@ export class RoleSeeder {
     const roles = [
       {
         _id: ROLE_IDS.ADMIN_WORKSPACE,
-        name: 'Admin Workspace',
+        name: 'Admin',
         permissions: [
           { action: RoleAction.VIEW,    resource: RoleResource.WORKSPACE },
           { action: RoleAction.EDIT,    resource: RoleResource.WORKSPACE },
@@ -29,7 +29,7 @@ export class RoleSeeder {
       },
       {
         _id: ROLE_IDS.MEMBER_WORKSPACE,
-        name: 'Member Workspace',
+        name: 'Member',
         permissions: [
           { action: RoleAction.VIEW,    resource: RoleResource.WORKSPACE },
           { action: RoleAction.COMMENT, resource: RoleResource.WORKSPACE },
@@ -38,11 +38,14 @@ export class RoleSeeder {
     ];
 
     for (const role of roles) {
-      await this.roleModel.updateOne(
-        { name: role.name },      // filter: tìm theo tên
-        { $set: role },           // nếu có thì update
-        { upsert: true },         // nếu chưa có thì insert
-      );
+        // Tách _id ra khỏi phần dữ liệu dùng để update
+        const { _id, ...updateData } = role;
+
+        await this.roleModel.updateOne(
+          { _id: _id },           
+          { $set: updateData },
+          { upsert: true },
+        );
     }
 
     console.log('✅ Roles seeded successfully');
