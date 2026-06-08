@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { WorkspaceService } from './workspace.service';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
@@ -10,6 +10,11 @@ import type { UserDocument } from '../auth/schemas/user.schema';
 @Controller('workspace')
 export class WorkspaceController {
   constructor(private readonly workspaceService: WorkspaceService) {}
+
+  @Get('/roles')
+  async getWorkspaceRoles() {
+    return this.workspaceService.getWorkspaceRoles();
+  }
 
   @Post()
   create(@Body() createWorkspaceDto: CreateWorkspaceDto, @CurrentUser() user: UserDocument) {
@@ -48,4 +53,15 @@ export class WorkspaceController {
   ) {
     return this.workspaceService.inviteMember(workspaceId, inviteMemberDto, user);
   }
+
+  @Get(':workspaceId/member-candidates')
+  @Permissions('INVITE', 'MEMBER')
+  async getMemberCandidates(
+    @Param('workspaceId') workspaceId: string,
+    @Query('email') keyword: string,
+  ) {
+    return this.workspaceService.getMemberCandidates(workspaceId, keyword);
+  }
+
+  
 }
