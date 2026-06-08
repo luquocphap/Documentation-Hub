@@ -17,6 +17,7 @@ import { PermissionGuard } from './common/guards/permission.guard';
 import { WorkspaceMember, WorkspaceMemberSchema } from './modules-api/workspace/schemas/workspace_members.schema';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { User, UserSchema } from './modules-api/auth/schemas/user.schema';
+import { DocumentModule } from './modules-api/document/document.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { User, UserSchema } from './modules-api/auth/schemas/user.schema';
       { name: WorkspaceMember.name, schema: WorkspaceMemberSchema }
     ]),
      WorkspaceModule,
+     DocumentModule,
     ],
   controllers: [AppController],
   providers: [
