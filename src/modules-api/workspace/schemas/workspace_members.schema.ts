@@ -1,8 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { Workspace } from './workspaces.schema';
-import { User } from './user.schema';
 import { Role } from './roles.schema';
+import { User } from 'src/modules-api/auth/schemas/user.schema';
 
 export type WorkspaceMemberDocument = HydratedDocument<WorkspaceMember>;
 
@@ -18,36 +18,36 @@ export class WorkspaceMember {
     required: true,
     index: true,
   })
-  workspaceId: Types.ObjectId;
+  workspaceId!: Types.ObjectId;
 
   @Prop({
     type: Types.ObjectId,
     ref: User.name,
     required: true,
   })
-  userId: Types.ObjectId;
+  userId!: Types.ObjectId;
 
   @Prop({
     type: Types.ObjectId,
     ref: Role.name,
     required: true,
   })
-  roleId: Types.ObjectId;
+  roleId!: Types.ObjectId;
 
   @Prop({
     required: true,
     default: () => new Date(),
   })
-  joinedAt: Date;
+  joinedAt!: Date;
 
   @Prop({ default: false })
-  isDeleted: boolean;
+  isDeleted!: boolean;
 
   @Prop({ type: Date, default: null })
-  deletedAt: Date | null;
+  deletedAt!: Date | null;
 
   @Prop({ type: Types.ObjectId, ref: User.name, default: null })
-  deletedBy: Types.ObjectId | null;
+  deletedBy!: Types.ObjectId | null;
 }
 
 export const WorkspaceMemberSchema = SchemaFactory.createForClass(WorkspaceMember);

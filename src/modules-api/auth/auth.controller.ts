@@ -5,9 +5,9 @@ import type { Request, Response } from 'express';
 import { RegisterBody } from './dto/register.dto';
 import { Public } from 'src/common/decorators/public.decorator';
 import { User as CurrentUser } from 'src/common/decorators/user.decorator';
-import type { UserDocument } from 'src/modules-system/database/schemas/user.schema';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { NODE_ENV } from 'src/common/constants/app.constant';
+import type { UserDocument } from './schemas/user.schema';
 
 @Controller('auth')
 export class AuthController {

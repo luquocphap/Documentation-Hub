@@ -5,8 +5,8 @@ import { Model } from 'mongoose';
 import { TokenExpiredError } from 'jsonwebtoken';
 import { TokenService } from 'src/modules-system/token/token.service';
 import { TokenPayload } from 'src/modules-system/token/token.types';
-import { User } from 'src/modules-system/database/schemas/user.schema';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { User } from 'src/modules-api/auth/schemas/user.schema';
 
 @Injectable()
 export class ProtectGuard implements CanActivate {

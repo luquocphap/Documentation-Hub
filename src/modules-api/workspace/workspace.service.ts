@@ -2,17 +2,17 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { InjectModel } from '@nestjs/mongoose';
-import { Workspace } from 'src/modules-system/database/schemas/workspaces.schema';
+import { Workspace } from 'src/modules-api/workspace/schemas/workspaces.schema';
 import { Model, Types } from 'mongoose';
-import { WorkspaceMember } from 'src/modules-system/database/schemas/workspace_members.schema';
-import { User, UserDocument } from 'src/modules-system/database/schemas/user.schema';
+import { WorkspaceMember } from 'src/modules-api/workspace/schemas/workspace_members.schema';
 import { ROLE_IDS } from 'src/common/seeds/role.seed';
-import { InvitationStatus, WorkspaceInvitation } from 'src/modules-system/database/schemas/workspace-invitation.schema';
+import { InvitationStatus, WorkspaceInvitation } from 'src/modules-api/workspace/schemas/workspace-invitation.schema';
 import { OnEvent } from '@nestjs/event-emitter';
-import { Role } from 'src/modules-system/database/schemas/roles.schema';
+import { Role } from 'src/modules-api/workspace/schemas/roles.schema';
 import { APP_URL } from 'src/common/constants/app.constant';
 import { sendWorkspaceInvitationEmail } from 'src/common/verify-email/send-workspace-invitation-email';
 import { InviteMemberDto } from './dto/invite-memer.dto';
+import { User, UserDocument } from '../auth/schemas/user.schema';
 
 @Injectable()
 export class WorkspaceService {

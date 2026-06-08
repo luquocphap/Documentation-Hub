@@ -22,13 +22,13 @@ export class Permission {
     required: true,
     enum: RoleAction,
   })
-  action: RoleAction;
+  action!: RoleAction;
 
   @Prop({
     required: true,
     enum: RoleResource,
   })
-  resource: RoleResource;
+  resource!: RoleResource;
 }
 
 @Schema({
@@ -43,7 +43,7 @@ export class Role {
     trim: true,
     maxlength: 50,
   })
-  name: string;
+  name!: string;
 
   @Prop({
     type: [{ 
@@ -57,7 +57,7 @@ export class Role {
       message: 'Permissions must have at least 1 item',
     },
   })
-  permissions: Permission[];
+  permissions!: Permission[];
 }
 
 export const RoleSchema = SchemaFactory.createForClass(Role);

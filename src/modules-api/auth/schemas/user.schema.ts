@@ -20,16 +20,16 @@ export type UserDocument = HydratedDocument<User>;
 })
 export class User {
   @Prop({ required: true, unique: true, lowercase: true, trim: true, index: true })
-  email: string;
+  email!: string;
 
   @Prop({ required: true, select: false })
-  passwordHash: string;
+  passwordHash!: string;
 
   @Prop({ required: true, trim: true })
-  fullName: string;
+  fullName!: string;
 
   @Prop({ default: false })
-  isEmailVerified: boolean;
+  isEmailVerified!: boolean;
 
   @Prop({ type: Types.ObjectId, default: null })
   lastAccessedWorkspaceId?: Types.ObjectId;

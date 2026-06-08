@@ -7,8 +7,8 @@ import {
 import { Reflector } from '@nestjs/core';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Permission, Role, RoleDocument } from 'src/modules-system/database/schemas/roles.schema';
-import { WorkspaceMember } from 'src/modules-system/database/schemas/workspace_members.schema';
+import { Permission, Role, RoleDocument } from 'src/modules-api/workspace/schemas/roles.schema';
+import { WorkspaceMember } from 'src/modules-api/workspace/schemas/workspace_members.schema';
 import { PERMISSION_KEY } from '../decorators/permission.decorator';
 
 @Injectable()

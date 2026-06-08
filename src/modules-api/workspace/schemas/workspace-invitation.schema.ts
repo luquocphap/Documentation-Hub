@@ -1,8 +1,9 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { Workspace } from './workspaces.schema';
-import { User } from './user.schema';
 import { Role } from './roles.schema';
+import { User } from 'src/modules-api/auth/schemas/user.schema';
+
 
 export type WorkspaceInvitationDocument = HydratedDocument<WorkspaceInvitation>;
 
@@ -24,28 +25,28 @@ export class WorkspaceInvitation {
     trim: true, 
     index: true 
   })
-  email: string;
+  email!: string;
 
   @Prop({
     type: Types.ObjectId,
     ref: Workspace.name,
     required: true,
   })
-  workspaceId: Types.ObjectId;
+  workspaceId!: Types.ObjectId;
 
   @Prop({
     type: Types.ObjectId,
     ref: Role.name,
     required: true,
   })
-  roleId: Types.ObjectId;
+  roleId!: Types.ObjectId;
 
   @Prop({
     type: Types.ObjectId,
     ref: User.name,
     required: true,
   })
-  inviterId: Types.ObjectId;
+  inviterId!: Types.ObjectId;
 
   @Prop({
     type: String,
@@ -53,7 +54,7 @@ export class WorkspaceInvitation {
     default: InvitationStatus.PENDING,
     index: true,
   })
-  status: InvitationStatus;
+  status!: InvitationStatus;
 
   @Prop({
     required: true,
@@ -61,7 +62,7 @@ export class WorkspaceInvitation {
     default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
     index: true,
   })
-  expiresAt: Date;
+  expiresAt!: Date;
 }
 
 export const WorkspaceInvitationSchema = SchemaFactory.createForClass(WorkspaceInvitation);
