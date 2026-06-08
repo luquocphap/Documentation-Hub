@@ -11,19 +11,19 @@ export type VerificationTokenDocument = HydratedDocument<VerificationToken>;
 })
 export class VerificationToken {
   @Prop({ required: true, unique: true, index: true })
-  token: string;
+  token!: string;
 
   @Prop({ type: Types.ObjectId, ref: User.name, required: true, index: true })
-  userId: Types.ObjectId;
+  userId!: Types.ObjectId;
 
   @Prop({ required: true })
-  expiresAt: Date;
+  expiresAt!: Date;
 
   @Prop({ default: false })
-  isUsed: boolean;
+  isUsed!: boolean;
 
   @Prop({ default: true })
-  isValid: boolean;
+  isValid!: boolean;
 }
 
 export const VerificationTokenSchema = SchemaFactory.createForClass(VerificationToken);

@@ -3,9 +3,9 @@ import { WorkspaceService } from './workspace.service';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { User as CurrentUser } from 'src/common/decorators/user.decorator';
-import type { UserDocument } from 'src/modules-system/database/schemas/user.schema';
 import { Permissions } from 'src/common/decorators/permission.decorator';
 import { InviteMemberDto } from './dto/invite-memer.dto';
+import type { UserDocument } from '../auth/schemas/user.schema';
 
 @Controller('workspace')
 export class WorkspaceController {

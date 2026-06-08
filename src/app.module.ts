@@ -9,14 +9,14 @@ import { ResponseSuccessInterceptor } from './common/interceptors/response-succe
 import { TokenModule } from './modules-system/token/token.module';
 import { DatabaseModule } from './modules-system/database/database.module';
 import { MongooseModule } from '@nestjs/mongoose';
-import { User, UserSchema } from './modules-system/database/schemas/user.schema';
 import { RedisModule } from './modules-system/redis/redis.module';
-import { Role, RoleSchema } from './modules-system/database/schemas/roles.schema';
-import { WorkspaceModule } from './modules-api/workspace/workspace.module';
+import { Role, RoleSchema } from './modules-api/workspace/schemas/roles.schema';
+import { WorkspaceModule } from './modules-api/workspace/schemas/workspace.module';
 import { RoleSeeder } from './common/seeds/role.seed';
 import { PermissionGuard } from './common/guards/permission.guard';
-import { WorkspaceMember, WorkspaceMemberSchema } from './modules-system/database/schemas/workspace_members.schema';
+import { WorkspaceMember, WorkspaceMemberSchema } from './modules-api/workspace/schemas/workspace_members.schema';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { User, UserSchema } from './modules-api/auth/schemas/user.schema';
 
 @Module({
   imports: [

@@ -5,13 +5,13 @@ import { TokenService } from 'src/modules-system/token/token.service';
 import { RegisterBody } from './dto/register.dto';
 import { Request } from 'express';
 import { InjectModel } from '@nestjs/mongoose';
-import { User, UserDocument } from 'src/modules-system/database/schemas/user.schema';
 import { Model } from 'mongoose';
-import { VerificationToken } from 'src/modules-system/database/schemas/verification-token.schema';
 import { sendVerifyEmail } from 'src/common/verify-email/send-verify-email';
 import crypto from "crypto";
 import { RedisService } from 'src/modules-system/redis/redis.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { User, UserDocument } from './schemas/user.schema';
+import { VerificationToken } from './schemas/verification-token.schema';
 
 @Injectable()
 export class AuthService {

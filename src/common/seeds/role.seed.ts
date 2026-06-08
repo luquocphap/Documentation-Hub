@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Role, RoleAction, RoleResource } from 'src/modules-system/database/schemas/roles.schema';
+import { Role, RoleAction, RoleResource } from 'src/modules-api/workspace/schemas/roles.schema';
 
 export const ROLE_IDS = {
   ADMIN_WORKSPACE:  new Types.ObjectId('000000000000000000000001'),
