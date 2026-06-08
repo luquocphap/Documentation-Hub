@@ -40,6 +40,12 @@ export class WorkspaceMember {
   })
   joinedAt!: Date;
 
+  @Prop({ required: true, trim: true, maxlength: 60 })
+  workspaceName!: string;
+
+  @Prop({ type: String, required: false, trim: true, maxlength: 255, default: null })
+  workspaceDescription!: string | null;
+
   @Prop({ default: false })
   isDeleted!: boolean;
 
@@ -52,7 +58,11 @@ export class WorkspaceMember {
 
 export const WorkspaceMemberSchema = SchemaFactory.createForClass(WorkspaceMember);
 
-// Index
-WorkspaceMemberSchema.index({ workspaceId: 1, userId: 1 }, { unique: true });
-WorkspaceMemberSchema.index({ userId: 1 });
+// Index 
+WorkspaceMemberSchema.index(
+  { workspaceId: 1, userId: 1 }, 
+  { unique: true, partialFilterExpression: { isDeleted: false } }
+);
+// Tối ưu hóa cho hàm gọi Dashboard: Tìm member của 1 user và chưa bị xóa
+WorkspaceMemberSchema.index({ userId: 1, isDeleted: 1 });
 WorkspaceMemberSchema.index({ workspaceId: 1, roleId: 1 });

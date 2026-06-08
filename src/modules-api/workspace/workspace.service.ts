@@ -35,62 +35,42 @@ export class WorkspaceService {
     const workspaceMember = await this.workspaceMemberModel.create({
       workspaceId: newWorkspace._id,
       userId: user._id,
-      roleId: ROLE_IDS.ADMIN_WORKSPACE
+      roleId: ROLE_IDS.ADMIN_WORKSPACE,
+      workspaceName: newWorkspace.name,
+      workspaceDescription: newWorkspace.description
     });
 
     return true;
   }
 
   async findAll(user: UserDocument) {
-    // Lấy danh sách workspace của user với role name + số lượng members
-    const workspacesWithRoles = await this.workspaceMemberModel
-      .aggregate([
-        // Lọc workspace của user hiện tại
-        { 
-          $match: { 
-            userId: user._id,
-            isDeleted: { $ne: true } // theo cơ chế soft delete
-          } 
-        },
-
-        // Lookup workspace info
-        {
-          $lookup: {
-            from: 'workspaces',
-            localField: 'workspaceId',
-            foreignField: '_id',
-            as: 'workspace'
-          }
-        },
-        { $unwind: '$workspace' },
-
-        // Lookup role name
-        {
-          $lookup: {
-            from: 'roles',
-            localField: 'roleId',
-            foreignField: '_id',
-            as: 'role'
-          }
-        },
-        { $unwind: '$role' },
-
-        // Chỉ lấy các field cần thiết
-        {
-          $project: {
-            _id: '$workspace._id',
-            workspaceName: '$workspace.name',
-            workspaceDescription: '$workspace.description',
-            createdAt: '$workspace.created_at',
-            userRole: '$role.name',
-            memberCount: '$workspace.memberCount',
-            joinedAt: 1
-          }
-        }
-      ])
+    const members = await this.workspaceMemberModel
+      .find({
+        userId: user._id,
+        isDeleted: { $ne: true }
+      })
+      .populate('roleId', 'name')
+      // lấy memberCount và created_at
+      .populate({
+        path: 'workspaceId',
+        select: 'memberCount created_at isDeleted',
+        match: { isDeleted: { $ne: true } } 
+      })
+      .sort({ joinedAt: -1 })
       .exec();
 
-    return workspacesWithRoles;
+    return members
+      // Lọc bỏ trường hợp rác: member còn nhưng workspace đã bị xóa (match ở trên sẽ trả về null)
+      .filter((member) => member.workspaceId !== null) 
+      .map((member: any) => ({
+        _id: member.workspaceId._id,
+        workspaceName: member.workspaceName,
+        workspaceDescription: member.workspaceDescription,
+        createdAt: member.workspaceId.created_at,
+        userRole: member.roleId?.name,
+        memberCount: member.workspaceId.memberCount,
+        joinedAt: member.joinedAt
+      }));
   }
 
   async update(id: string, updateWorkspaceDto: UpdateWorkspaceDto) {
@@ -102,6 +82,18 @@ export class WorkspaceService {
       { name, description },
       { new: true } // trả về workspace mới
     ).exec();
+
+    if (updatedWorkspace) {
+        await this.workspaceMemberModel.updateMany(
+            { workspaceId: id },
+            { 
+                $set: { 
+                    workspaceName: name, 
+                    workspaceDescription: description 
+                } 
+            }
+        ).exec();
+    }
 
     if (!updatedWorkspace || updatedWorkspace.isDeleted) {
       throw new NotFoundException('Workspace không tồn tại hoặc đã bị xóa');
@@ -160,16 +152,16 @@ export class WorkspaceService {
     // Duyệt qua từng lời mời để add vào workspace_members
     for (const invite of pendingInvites) {
       const isMemberExist = await this.workspaceMemberModel.exists({
-        workspaceId: invite.workspaceId,
+        workspaceId: new Types.ObjectId(invite.workspaceId),
         userId: new Types.ObjectId(userId)
       });
 
       if (!isMemberExist) {
         // Thêm user vào workspace
         await this.workspaceMemberModel.create({
-          workspaceId: invite.workspaceId,
+          workspaceId: new Types.ObjectId(invite.workspaceId),
           userId: new Types.ObjectId(userId),
-          roleId: invite.roleId,
+          roleId: new Types.ObjectId(invite.roleId),
           joinedAt: new Date()
         });
         
@@ -218,7 +210,7 @@ export class WorkspaceService {
 
       // Add thẳng vào workspace_members
       await this.workspaceMemberModel.create({
-        workspaceId,
+        workspaceId: new Types.ObjectId(workspaceId),
         userId: userExist._id,
         roleId,
         joinedAt: new Date()
