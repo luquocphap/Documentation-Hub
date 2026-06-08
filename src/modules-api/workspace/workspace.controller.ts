@@ -21,6 +21,12 @@ export class WorkspaceController {
     return this.workspaceService.findAll(user);
   }
 
+  @Get(':workspaceId')
+  @Permissions('VIEW', 'WORKSPACE')
+  findOne(@Param('workspaceId') workspaceId: string, @CurrentUser() user: UserDocument) {
+    return this.workspaceService.findOne(workspaceId, user);
+  }
+
   @Patch(':workspaceId')
   @Permissions("EDIT", "WORKSPACE")
   update(@Param('workspaceId') id: string, @Body() updateWorkspaceDto: UpdateWorkspaceDto) {

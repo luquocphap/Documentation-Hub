@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { InjectModel } from '@nestjs/mongoose';
@@ -13,6 +13,7 @@ import { APP_URL } from 'src/common/constants/app.constant';
 import { sendWorkspaceInvitationEmail } from 'src/common/verify-email/send-workspace-invitation-email';
 import { InviteMemberDto } from './dto/invite-memer.dto';
 import { User, UserDocument } from '../auth/schemas/user.schema';
+import { DocumentModel } from '../document/schemas/documents.schema';
 
 @Injectable()
 export class WorkspaceService {
@@ -22,6 +23,7 @@ export class WorkspaceService {
     @InjectModel(WorkspaceInvitation.name) private invitationModel: Model<WorkspaceInvitation>,
     @InjectModel(User.name) private readonly userModel: Model<User>, 
     @InjectModel(Role.name) private readonly roleModel: Model<Role>,
+    @InjectModel(DocumentModel.name) private readonly documentModel: Model<DocumentModel>,
   ) {}
   async create(createWorkspaceDto: CreateWorkspaceDto, user: UserDocument) {
     const { name, description } = createWorkspaceDto;
@@ -40,7 +42,9 @@ export class WorkspaceService {
       workspaceDescription: newWorkspace.description
     });
 
-    return true;
+    return {
+      _id: newWorkspace._id
+    };
   }
 
   async findAll(user: UserDocument) {
@@ -71,6 +75,48 @@ export class WorkspaceService {
         memberCount: member.workspaceId.memberCount,
         joinedAt: member.joinedAt
       }));
+  }
+
+  async findOne(id: string, user: UserDocument) {
+    const workspaceId = new Types.ObjectId(id);
+
+    const [workspace, documents, currentMember] = await Promise.all([
+      this.workspaceModel.findOne({ 
+        _id: workspaceId, 
+        isDeleted: { $ne: true } 
+      }).exec(),
+      this.documentModel.find({
+        workspaceId: workspaceId,
+        isDeleted: { $ne: true }
+      })
+      .sort({ created_at: -1 })
+      .exec(),
+      this.workspaceMemberModel.findOne({
+        workspaceId: workspaceId,
+        userId: user._id,
+        isDeleted: { $ne: true }
+      })
+      .populate('roleId', 'name')
+      .exec()
+    ]);
+
+    if (!workspace) {
+      throw new NotFoundException('Workspace không tồn tại hoặc đã bị xóa');
+    }
+
+    if (!currentMember) {
+      throw new ForbiddenException('Bạn không phải là thành viên của Workspace này');
+    }
+
+    return {
+      _id: workspace._id,
+      name: workspace.name,
+      description: workspace.description,
+      memberCount: workspace.memberCount,
+      created_at: (workspace as any).created_at, 
+      userRole: (currentMember.roleId as any)?.name,
+      documents: documents
+    };
   }
 
   async update(id: string, updateWorkspaceDto: UpdateWorkspaceDto) {
@@ -149,8 +195,10 @@ export class WorkspaceService {
 
     if (pendingInvites.length === 0) return;
 
+
     // Duyệt qua từng lời mời để add vào workspace_members
     for (const invite of pendingInvites) {
+      const workspace = await this.workspaceModel.findById(invite.workspaceId);
       const isMemberExist = await this.workspaceMemberModel.exists({
         workspaceId: new Types.ObjectId(invite.workspaceId),
         userId: new Types.ObjectId(userId)
@@ -160,6 +208,8 @@ export class WorkspaceService {
         // Thêm user vào workspace
         await this.workspaceMemberModel.create({
           workspaceId: new Types.ObjectId(invite.workspaceId),
+          workspaceName: workspace?.name,
+          workspaceDescription: workspace?.description,
           userId: new Types.ObjectId(userId),
           roleId: new Types.ObjectId(invite.roleId),
           joinedAt: new Date()
@@ -211,6 +261,8 @@ export class WorkspaceService {
       // Add thẳng vào workspace_members
       await this.workspaceMemberModel.create({
         workspaceId: new Types.ObjectId(workspaceId),
+        workspaceName: workspace.name,
+        workspaceDescription: workspace.description,
         userId: userExist._id,
         roleId,
         joinedAt: new Date()

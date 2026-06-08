@@ -7,6 +7,7 @@ import { WorkspaceMember, WorkspaceMemberSchema } from 'src/modules-api/workspac
 import { Role, RoleSchema } from 'src/modules-api/workspace/schemas/roles.schema';
 import { WorkspaceInvitation, WorkspaceInvitationSchema } from 'src/modules-api/workspace/schemas/workspace-invitation.schema';
 import { User, UserSchema } from 'src/modules-api/auth/schemas/user.schema';
+import { DocumentModel, DocumentSchema } from '../document/schemas/documents.schema';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { User, UserSchema } from 'src/modules-api/auth/schemas/user.schema';
       { name: WorkspaceInvitation.name, schema: WorkspaceInvitationSchema },
       { name: User.name, schema: UserSchema },
       { name: Role.name, schema: RoleSchema },
+      { name: DocumentModel.name, schema: DocumentSchema }
     ]),
   ],
   controllers: [WorkspaceController],
