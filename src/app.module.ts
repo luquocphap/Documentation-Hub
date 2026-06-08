@@ -11,7 +11,7 @@ import { DatabaseModule } from './modules-system/database/database.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { RedisModule } from './modules-system/redis/redis.module';
 import { Role, RoleSchema } from './modules-api/workspace/schemas/roles.schema';
-import { WorkspaceModule } from './modules-api/workspace/schemas/workspace.module';
+import { WorkspaceModule } from './modules-api/workspace/workspace.module';
 import { RoleSeeder } from './common/seeds/role.seed';
 import { PermissionGuard } from './common/guards/permission.guard';
 import { WorkspaceMember, WorkspaceMemberSchema } from './modules-api/workspace/schemas/workspace_members.schema';
