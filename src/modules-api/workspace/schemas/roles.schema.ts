@@ -46,6 +46,11 @@ export class Role {
   name!: string;
 
   @Prop({
+    trim: true,
+  })
+  description!: string;
+
+  @Prop({
     type: [{ 
         action: { type: String, enum: Object.values(RoleAction) }, 
         resource: { type: String, enum: Object.values(RoleResource) },
