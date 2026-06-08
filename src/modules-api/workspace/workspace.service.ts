@@ -315,4 +315,48 @@ export class WorkspaceService {
 
     return { message: 'Đã gửi lời mời tham gia qua email cho tài khoản chưa xác thực' };
   }
+
+  async getMemberCandidates(workspaceId: string, keyword: string) {
+    if (!keyword || keyword.trim() === '') {
+      throw new BadRequestException('Vui lòng cung cấp từ khóa email');
+    }
+
+    // 1. Tìm danh sách users khớp với email keyword
+    const users = await this.userModel
+      .find({ email: { $regex: keyword, $options: 'i' } })
+      .select('email fullName')
+      .limit(20)
+      .lean();
+
+    if (users.length === 0) return [];
+
+    const userIds = users.map(u => u._id);
+
+    // 2. Query nhanh bảng member xem ai đã join rồi
+    const joinedMembers = await this.workspaceMemberModel.find({
+      workspaceId: new Types.ObjectId(workspaceId),
+      userId: { $in: userIds },
+      isDeleted: { $ne: true }
+    }).select('userId').lean();
+
+    const joinedUserIdsSet = new Set(joinedMembers.map(m => m.userId.toString()));
+
+    // 3. Map dữ liệu để trả ra trạng thái kèm theo
+    return users.map(user => ({
+      id: user._id,
+      email: user.email,
+      fullName: user.fullName,
+      isJoined: joinedUserIdsSet.has(user._id.toString())
+    }));
+  }
+
+  async getWorkspaceRoles() {
+    const roles = await this.roleModel
+    .find()
+    .select('-permissions')
+    .lean()
+    .exec();
+
+    return roles;
+  }
 }
