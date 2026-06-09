@@ -14,6 +14,7 @@ import { sendWorkspaceInvitationEmail } from 'src/common/verify-email/send-works
 import { InviteMemberDto } from './dto/invite-memer.dto';
 import { User, UserDocument } from '../auth/schemas/user.schema';
 import { DocumentModel } from '../document/schemas/documents.schema';
+import { ChangeRoleDto } from './dto/change-role.dto';
 
 @Injectable()
 export class WorkspaceService {
@@ -358,5 +359,55 @@ export class WorkspaceService {
     .exec();
 
     return roles;
+  }
+
+  async getMembers(workspaceId: string) {
+    const members = await this.workspaceMemberModel
+      .find({
+        workspaceId: new Types.ObjectId(workspaceId),
+        isDeleted: { $ne: true },
+      })
+      .populate('userId', 'fullName email')
+      .populate('roleId', 'name')
+      .sort({ joinedAt: 1 })
+      .exec();
+
+    return members.map((m: any) => ({
+      userId: m.userId._id,
+      fullName: m.userId?.fullName,
+      email: m.userId?.email,
+      role: m.roleId?.name,
+      roleId: m.roleId?._id,
+      joinedAt: m.joinedAt,
+    }));
+  }
+
+  async changeMemberRole(workspaceId: string, payload: ChangeRoleDto) {
+    const { userId, roleId } = payload;
+
+    // Kiểm tra xem Role mới truyền lên có hợp lệ trong hệ thống không
+    const roleExist = await this.roleModel.findById(roleId).exec();
+    if (!roleExist) {
+      throw new BadRequestException('Role does not exist');
+    }
+
+    // Tìm và cập nhật role mới cho member trong đúng workspaceId
+    const updatedMember = await this.workspaceMemberModel.findOneAndUpdate(
+      {
+        workspaceId: new Types.ObjectId(workspaceId),
+        userId: new Types.ObjectId(userId),
+        isDeleted: { $ne: true },
+      },
+      { 
+        $set: { roleId: new Types.ObjectId(roleId) } 
+      },
+      { returnDocument: 'after' }
+    ).exec();
+
+    if (!updatedMember) {
+      throw new NotFoundException('Không tìm thấy thành viên này trong Workspace hoặc thành viên đã bị xóa');
+    }
+
+    return { message: 'Cập nhật vai trò thành viên thành công' };
   }
 }
