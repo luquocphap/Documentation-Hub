@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { Workspace } from './workspaces.schema';
-import { Role } from './roles.schema';
+import { WorkspaceRole } from './workspace-roles.schema';
 import { User } from 'src/modules-api/auth/schemas/user.schema';
 
 export type WorkspaceMemberDocument = HydratedDocument<WorkspaceMember>;
@@ -29,7 +29,7 @@ export class WorkspaceMember {
 
   @Prop({
     type: Types.ObjectId,
-    ref: Role.name,
+    ref: WorkspaceRole.name,
     required: true,
   })
   roleId!: Types.ObjectId;

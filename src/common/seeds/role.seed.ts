@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Role, RoleAction, RoleResource } from 'src/modules-api/workspace/schemas/roles.schema';
+import { WorkspaceRole, WorkspaceRoleAction, WorkspaceRoleResource } from 'src/modules-api/workspace/schemas/workspace-roles.schema';
 
 export const ROLE_IDS = {
   ADMIN_WORKSPACE:  new Types.ObjectId('000000000000000000000001'),
@@ -9,9 +9,9 @@ export const ROLE_IDS = {
 };
 
 @Injectable()
-export class RoleSeeder {
+export class WorkspaceRoleSeeder {
   constructor(
-    @InjectModel(Role.name) private readonly roleModel: Model<Role>,
+    @InjectModel(WorkspaceRole.name) private readonly roleModel: Model<WorkspaceRole>,
   ) {}
 
   async seed() {
@@ -21,11 +21,11 @@ export class RoleSeeder {
         name: 'Admin',
         description: "Can manage settings & members",
         permissions: [
-          { action: RoleAction.VIEW,    resource: RoleResource.WORKSPACE },
-          { action: RoleAction.EDIT,    resource: RoleResource.WORKSPACE },
-          { action: RoleAction.DELETE,  resource: RoleResource.WORKSPACE },
-          { action: RoleAction.INVITE,  resource: RoleResource.MEMBER },
-          { action: RoleAction.REMOVE,  resource: RoleResource.MEMBER },
+          { action: WorkspaceRoleAction.VIEW,    resource: WorkspaceRoleResource.WORKSPACE },
+          { action: WorkspaceRoleAction.EDIT,    resource: WorkspaceRoleResource.WORKSPACE },
+          { action: WorkspaceRoleAction.DELETE,  resource: WorkspaceRoleResource.WORKSPACE },
+          { action: WorkspaceRoleAction.INVITE,  resource: WorkspaceRoleResource.MEMBER },
+          { action: WorkspaceRoleAction.REMOVE,  resource: WorkspaceRoleResource.MEMBER },
         ],
       },
       {
@@ -33,8 +33,8 @@ export class RoleSeeder {
         name: 'Member',
         description: "Can create & edit documents",
         permissions: [
-          { action: RoleAction.VIEW,    resource: RoleResource.WORKSPACE },
-          { action: RoleAction.COMMENT, resource: RoleResource.WORKSPACE },
+          { action: WorkspaceRoleAction.VIEW,    resource: WorkspaceRoleResource.WORKSPACE },
+          { action: WorkspaceRoleAction.COMMENT, resource: WorkspaceRoleResource.WORKSPACE },
         ],
       },
     ];
@@ -50,6 +50,6 @@ export class RoleSeeder {
         );
     }
 
-    console.log('✅ Roles seeded successfully');
+    console.log('✅ WorkspaceRoles seeded successfully');
   }
 }

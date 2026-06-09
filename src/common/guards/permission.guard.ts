@@ -7,7 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Permission, Role, RoleDocument } from 'src/modules-api/workspace/schemas/roles.schema';
+import { Permission, WorkspaceRole, WorkspaceRoleDocument } from 'src/modules-api/workspace/schemas/workspace-roles.schema';
 import { WorkspaceMember } from 'src/modules-api/workspace/schemas/workspace_members.schema';
 import { PERMISSION_KEY } from '../decorators/permission.decorator';
 
@@ -15,7 +15,7 @@ import { PERMISSION_KEY } from '../decorators/permission.decorator';
 export class PermissionGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
-    @InjectModel(Role.name) private roleModel: Model<RoleDocument>,
+    @InjectModel(WorkspaceRole.name) private roleModel: Model<WorkspaceRoleDocument>,
     @InjectModel(WorkspaceMember.name) private memberModel: Model<WorkspaceMember>, 
   ) {}
 
@@ -51,7 +51,7 @@ export class PermissionGuard implements CanActivate {
     const role = await this.roleModel.findById(member.roleId).exec();
 
     if (!role) {
-      throw new ForbiddenException('Role không tồn tại');
+      throw new ForbiddenException('WorkspaceRole không tồn tại');
     }
 
     const hasPermission = role.permissions.some(

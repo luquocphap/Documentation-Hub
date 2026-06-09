@@ -1,9 +1,9 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 
-export type RoleDocument = HydratedDocument<Role>;
+export type WorkspaceRoleDocument = HydratedDocument<WorkspaceRole>;
 
-export enum RoleAction {
+export enum WorkspaceRoleAction {
   VIEW = 'VIEW',
   EDIT = 'EDIT',
   DELETE = 'DELETE',
@@ -12,7 +12,7 @@ export enum RoleAction {
   COMMENT = 'COMMENT',
 }
 
-export enum RoleResource {
+export enum WorkspaceRoleResource {
   WORKSPACE = 'WORKSPACE',
   MEMBER = 'MEMBER',
 }
@@ -20,15 +20,15 @@ export enum RoleResource {
 export class Permission {
   @Prop({
     required: true,
-    enum: RoleAction,
+    enum: WorkspaceRoleAction,
   })
-  action!: RoleAction;
+  action!: WorkspaceRoleAction;
 
   @Prop({
     required: true,
-    enum: RoleResource,
+    enum: WorkspaceRoleResource,
   })
-  resource!: RoleResource;
+  resource!: WorkspaceRoleResource;
 }
 
 @Schema({
@@ -36,7 +36,7 @@ export class Permission {
   timestamps: false,
   versionKey: false,
 })
-export class Role {
+export class WorkspaceRole {
   @Prop({
     required: true,
     unique: true,
@@ -52,8 +52,8 @@ export class Role {
 
   @Prop({
     type: [{ 
-        action: { type: String, enum: Object.values(RoleAction) }, 
-        resource: { type: String, enum: Object.values(RoleResource) },
+        action: { type: String, enum: Object.values(WorkspaceRoleAction) }, 
+        resource: { type: String, enum: Object.values(WorkspaceRoleResource) },
         _id: false
     }],
     required: true,
@@ -65,4 +65,4 @@ export class Role {
   permissions!: Permission[];
 }
 
-export const RoleSchema = SchemaFactory.createForClass(Role);
+export const WorkspaceRoleSchema = SchemaFactory.createForClass(WorkspaceRole);
