@@ -16,7 +16,7 @@ export class Workspace {
     minlength: 1,
     maxlength: 60,
   })
-  name: string;
+  name!: string;
 
   @Prop({
     type: String,
@@ -25,23 +25,23 @@ export class Workspace {
     maxlength: 255,
     default: null,
   })
-  description: string | null;
+  description!: string | null;
 
   @Prop({
     type: Number,
     default: 0,
     min: 0,
   })
-  memberCount: number;
+  memberCount!: number;
 
   @Prop({ default: false })
-  isDeleted: boolean;
+  isDeleted!: boolean;
 
   @Prop({ type: Date, default: null })
-  deletedAt: Date | null;
+  deletedAt!: Date | null;
 
   @Prop({ type: Types.ObjectId, ref: User.name, default: null })
-  deletedBy: Types.ObjectId | null;
+  deletedBy!: Types.ObjectId | null;
 }
 
 export const WorkspaceSchema = SchemaFactory.createForClass(Workspace);

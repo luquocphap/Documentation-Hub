@@ -8,7 +8,7 @@ import { WorkspaceMember } from 'src/modules-api/workspace/schemas/workspace_mem
 import { ROLE_IDS } from 'src/common/seeds/role.seed';
 import { InvitationStatus, WorkspaceInvitation } from 'src/modules-api/workspace/schemas/workspace-invitation.schema';
 import { OnEvent } from '@nestjs/event-emitter';
-import { Role } from 'src/modules-api/workspace/schemas/roles.schema';
+import { WorkspaceRole } from 'src/modules-api/workspace/schemas/workspace-roles.schema';
 import { APP_URL } from 'src/common/constants/app.constant';
 import { sendWorkspaceInvitationEmail } from 'src/common/verify-email/send-workspace-invitation-email';
 import { InviteMemberDto } from './dto/invite-memer.dto';
@@ -23,7 +23,7 @@ export class WorkspaceService {
     @InjectModel(WorkspaceMember.name) private readonly workspaceMemberModel: Model<WorkspaceMember>,
     @InjectModel(WorkspaceInvitation.name) private invitationModel: Model<WorkspaceInvitation>,
     @InjectModel(User.name) private readonly userModel: Model<User>, 
-    @InjectModel(Role.name) private readonly roleModel: Model<Role>,
+    @InjectModel(WorkspaceRole.name) private readonly roleModel: Model<WorkspaceRole>,
     @InjectModel(DocumentModel.name) private readonly documentModel: Model<DocumentModel>,
   ) {}
   async create(createWorkspaceDto: CreateWorkspaceDto, user: UserDocument) {

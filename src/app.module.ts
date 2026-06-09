@@ -10,9 +10,9 @@ import { TokenModule } from './modules-system/token/token.module';
 import { DatabaseModule } from './modules-system/database/database.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { RedisModule } from './modules-system/redis/redis.module';
-import { Role, RoleSchema } from './modules-api/workspace/schemas/roles.schema';
+import { WorkspaceRole, WorkspaceRoleSchema } from './modules-api/workspace/schemas/workspace-roles.schema';
 import { WorkspaceModule } from './modules-api/workspace/workspace.module';
-import { RoleSeeder } from './common/seeds/role.seed';
+import { WorkspaceRoleSeeder } from './common/seeds/role.seed';
 import { PermissionGuard } from './common/guards/permission.guard';
 import { WorkspaceMember, WorkspaceMemberSchema } from './modules-api/workspace/schemas/workspace_members.schema';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -29,7 +29,7 @@ import { DocumentModule } from './modules-api/document/document.module';
      RedisModule,
      MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
-      { name: Role.name, schema: RoleSchema },
+      { name: WorkspaceRole.name, schema: WorkspaceRoleSchema },
       { name: WorkspaceMember.name, schema: WorkspaceMemberSchema }
     ]),
      WorkspaceModule,
@@ -38,7 +38,7 @@ import { DocumentModule } from './modules-api/document/document.module';
   controllers: [AppController],
   providers: [
     AppService,
-    RoleSeeder,
+    WorkspaceRoleSeeder,
     {
       provide: APP_GUARD,
       useClass: ProtectGuard
@@ -58,7 +58,7 @@ import { DocumentModule } from './modules-api/document/document.module';
   ],
 })
 export class AppModule implements OnApplicationBootstrap {
-  constructor(private readonly roleSeeder: RoleSeeder) {}
+  constructor(private readonly roleSeeder: WorkspaceRoleSeeder) {}
 
   async onApplicationBootstrap() {
     await this.roleSeeder.seed();
