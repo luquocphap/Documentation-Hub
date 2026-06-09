@@ -6,6 +6,7 @@ import { User as CurrentUser } from 'src/common/decorators/user.decorator';
 import { Permissions } from 'src/common/decorators/permission.decorator';
 import { InviteMemberDto } from './dto/invite-memer.dto';
 import type { UserDocument } from '../auth/schemas/user.schema';
+import { ChangeRoleDto } from './dto/change-role.dto';
 
 @Controller('workspace')
 export class WorkspaceController {
@@ -25,6 +26,33 @@ export class WorkspaceController {
   async findAll(@CurrentUser() user: UserDocument) {
     return this.workspaceService.findAll(user);
   }
+
+  @Get(':workspaceId/members')
+  @Permissions('VIEW', 'WORKSPACE')
+  async getMembers(@Param('workspaceId') workspaceId: string) {
+    return this.workspaceService.getMembers(workspaceId);
+  }
+
+  @Delete(':workspaceId/members/:userId')
+  @Permissions('EDIT', 'WORKSPACE')
+  async removeMember(
+    @Param('workspaceId') workspaceId: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: UserDocument
+  ) {
+    return this.workspaceService.removeMember(workspaceId, userId, user);
+  }
+
+  @Post(':workspaceId/change-role')
+  @Permissions('EDIT', 'WORKSPACE')
+  async changeMemberRole(
+    @Param('workspaceId') workspaceId: string,
+    @Body() changeRoleDto: ChangeRoleDto,
+  ) {
+    return this.workspaceService.changeMemberRole(workspaceId, changeRoleDto);
+  }
+
+  
 
   @Get(':workspaceId')
   @Permissions('VIEW', 'WORKSPACE')
@@ -62,6 +90,4 @@ export class WorkspaceController {
   ) {
     return this.workspaceService.getMemberCandidates(workspaceId, keyword);
   }
-
-  
 }

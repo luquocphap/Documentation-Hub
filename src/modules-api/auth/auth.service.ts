@@ -5,7 +5,7 @@ import { TokenService } from 'src/modules-system/token/token.service';
 import { RegisterBody } from './dto/register.dto';
 import { Request } from 'express';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { sendVerifyEmail } from 'src/common/verify-email/send-verify-email';
 import crypto from "crypto";
 import { RedisService } from 'src/modules-system/redis/redis.service';
@@ -98,13 +98,13 @@ export class AuthService {
         }
     }
 
-    async getUserInfo(userId: string){
+    async getUserInfo(userId: Types.ObjectId){
         const user = await this.userModel.findById(userId).exec();
         if (!user) {
             throw new BadRequestException("User does not exist");
         }
 
-        return user;
+        return user.toJSON();
     }
 
     async refreshToken(req: Request){

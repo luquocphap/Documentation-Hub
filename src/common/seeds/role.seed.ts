@@ -19,6 +19,7 @@ export class RoleSeeder {
       {
         _id: ROLE_IDS.ADMIN_WORKSPACE,
         name: 'Admin',
+        description: "Can manage settings & members",
         permissions: [
           { action: RoleAction.VIEW,    resource: RoleResource.WORKSPACE },
           { action: RoleAction.EDIT,    resource: RoleResource.WORKSPACE },
@@ -30,6 +31,7 @@ export class RoleSeeder {
       {
         _id: ROLE_IDS.MEMBER_WORKSPACE,
         name: 'Member',
+        description: "Can create & edit documents",
         permissions: [
           { action: RoleAction.VIEW,    resource: RoleResource.WORKSPACE },
           { action: RoleAction.COMMENT, resource: RoleResource.WORKSPACE },

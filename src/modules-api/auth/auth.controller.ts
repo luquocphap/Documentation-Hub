@@ -50,7 +50,7 @@ export class AuthController {
   @Get("user-info")
   @UseInterceptors(ClassSerializerInterceptor)
   async getUserInfo(@CurrentUser() user: UserDocument) {
-    return user;
+    return await this.authService.getUserInfo(user._id);
   }
 
   @Post("refresh-token")
