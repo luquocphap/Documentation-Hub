@@ -1,11 +1,12 @@
 {
   "compilerOptions": {
+    "types": ["node", "multer"],
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "resolvePackageJsonExports": true,
     "esModuleInterop": true,
     "isolatedModules": true,
-    "declaration": true,
+    "declaration": true,\
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
