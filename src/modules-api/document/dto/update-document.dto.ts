@@ -1,4 +1,10 @@
-import { PartialType } from '@nestjs/swagger';
-import { CreateDocumentDto } from './create-document.dto';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
-export class UpdateDocumentDto extends PartialType(CreateDocumentDto) {}
+export class UpdateDocumentDto {
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(255)
+  @ApiProperty({ description: 'Tên tài liệu mới', example: 'Quy trình Onboarding (Mới)' })
+  title!: string;
+}

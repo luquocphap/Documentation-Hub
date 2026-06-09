@@ -33,8 +33,8 @@ export class PermissionGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
     
-    const workspaceId = request.params.workspaceId;
-    if (!user || !workspaceId) {
+    const workspaceId = request.params?.workspaceId;
+    if (!user && !workspaceId) {
       throw new ForbiddenException('Không thể xác thực ngữ cảnh Workspace hoặc User');
     }
 
