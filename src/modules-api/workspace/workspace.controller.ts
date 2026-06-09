@@ -33,6 +33,16 @@ export class WorkspaceController {
     return this.workspaceService.getMembers(workspaceId);
   }
 
+  @Delete(':workspaceId/members/:userId')
+  @Permissions('EDIT', 'WORKSPACE')
+  async removeMember(
+    @Param('workspaceId') workspaceId: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: UserDocument
+  ) {
+    return this.workspaceService.removeMember(workspaceId, userId, user);
+  }
+
   @Post(':workspaceId/change-role')
   @Permissions('EDIT', 'WORKSPACE')
   async changeMemberRole(
@@ -41,6 +51,8 @@ export class WorkspaceController {
   ) {
     return this.workspaceService.changeMemberRole(workspaceId, changeRoleDto);
   }
+
+  
 
   @Get(':workspaceId')
   @Permissions('VIEW', 'WORKSPACE')

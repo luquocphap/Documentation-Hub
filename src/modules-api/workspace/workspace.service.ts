@@ -260,14 +260,27 @@ export class WorkspaceService {
       }
 
       // Add thẳng vào workspace_members
-      await this.workspaceMemberModel.create({
-        workspaceId: new Types.ObjectId(workspaceId),
-        workspaceName: workspace.name,
-        workspaceDescription: workspace.description,
-        userId: userExist._id,
-        roleId,
-        joinedAt: new Date()
-      });
+      await this.workspaceMemberModel.findOneAndUpdate(
+        {
+          workspaceId: new Types.ObjectId(workspaceId),
+          userId: new Types.ObjectId(userExist._id)
+        },
+        {
+          $set: {
+            roleId: new Types.ObjectId(roleId),
+            joinedAt: new Date(),
+            isDeleted: false,
+            deletedAt: null,
+            deletedBy: null,
+            workspaceName: workspace.name,
+            workspaceDescription: workspace.description
+          }
+        },
+        { 
+          upsert: true,
+          returnDocument: 'after'
+        }
+      ).exec();
 
       // Tăng số lượng member
       await this.workspaceModel.findByIdAndUpdate(workspaceId, { $inc: { memberCount: 1 } });
@@ -409,5 +422,63 @@ export class WorkspaceService {
     }
 
     return { message: 'Cập nhật vai trò thành viên thành công' };
+  }
+
+  async removeMember(workspaceId: string, userId: string, currentUser: UserDocument) {
+
+    // Kiểm tra xem thành viên này có thực sự đang ở trong Workspace không
+    const targetMember = await this.workspaceMemberModel.findOne({
+      workspaceId: new Types.ObjectId(workspaceId),
+      userId: new Types.ObjectId(userId),
+      isDeleted: { $ne: true },
+    }).exec();
+
+    if (!targetMember) {
+      throw new NotFoundException('Không tìm thấy thành viên này hoặc họ đã bị xóa khỏi Workspace');
+    }
+
+    if (userId === currentUser._id.toString()) {
+      throw new BadRequestException("Không thể xóa chính mình")
+    }
+
+    // Lấy danh sách các Admin CÒN HOẠT ĐỘNG trong Workspace
+    const adminMembers = await this.workspaceMemberModel.find({
+      workspaceId: new Types.ObjectId(workspaceId),
+      roleId: ROLE_IDS.ADMIN_WORKSPACE,
+      isDeleted: { $ne: true } // Bắt buộc: Loại bỏ các record đã xóa mềm
+    }).exec();
+
+    const isTargetUserAdmin = adminMembers.some(
+      (m) => m.userId.toString() === userId.toString()
+    );
+
+    // Nếu chỉ còn 1 Admin (hoặc ít hơn) VÀ người đang bị thao tác chính là Admin đó -> Chặn lại
+    if (adminMembers.length <= 1 && isTargetUserAdmin) {
+      throw new BadRequestException("Không thể thực hiện vì đây là Admin duy nhất còn lại của Workspace");
+    }
+
+    // Thực hiện xóa mềm trong bảng workspace_members
+    const deletedMember = await this.workspaceMemberModel.findOneAndUpdate(
+      { _id: targetMember._id },
+      {
+        $set: {
+          isDeleted: true,
+          deletedAt: new Date(),
+          deletedBy: currentUser._id,
+        },
+      },
+      { returnDocument: 'after' }
+    ).exec();
+
+    // Đồng bộ lại dữ liệu: Giảm memberCount trong bảng workspaces đi 1
+    if (deletedMember) {
+      await this.workspaceModel.findByIdAndUpdate(
+        workspaceId,
+        { $inc: { memberCount: -1 } },
+        { returnDocument: 'after' }
+      ).exec();
+    }
+
+    return { message: 'Đã xóa thành viên khỏi Workspace thành công' };
   }
 }
