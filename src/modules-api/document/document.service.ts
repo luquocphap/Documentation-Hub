@@ -6,11 +6,14 @@ import { DocumentModel } from './schemas/documents.schema';
 import { Model, Types } from 'mongoose';
 import { UserDocument } from '../auth/schemas/user.schema';
 import { CloudinaryService } from 'src/modules-system/cloudinary/cloudinary.service';
+import { DocumentMember } from './schemas/document-members.schema';
+import { DOCUMENT_ROLE_IDS } from 'src/common/seeds/document-role.seed';
 
 @Injectable()
 export class DocumentService {
   constructor(
     @InjectModel(DocumentModel.name) private readonly documentModel: Model<DocumentModel>,
+    @InjectModel(DocumentMember.name) private readonly documentMemberModel: Model<DocumentMember>,
     private readonly cloudinaryService: CloudinaryService
   ) {}
   private async generateUniqueTitle(workspaceId: Types.ObjectId, baseTitle: string): Promise<string> {
@@ -71,6 +74,13 @@ export class DocumentService {
       title: uniqueTitle,
       public_id: "", // Sẽ được cập nhật khi user thực sự gọi upload file
       createdBy: user._id
+    });
+
+    await this.documentMemberModel.create({
+      documentId: newDocument._id,
+      userId: user._id,
+      roleId: DOCUMENT_ROLE_IDS.OWNER,
+      joinedAt: new Date()
     });
 
     return newDocument;

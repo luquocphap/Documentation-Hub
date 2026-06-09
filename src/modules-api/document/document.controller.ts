@@ -16,7 +16,7 @@ export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
 
   @Get()
-  @Permissions("VIEW", "WORKSPACE")
+  @Permissions("VIEW", "DOCUMENT")
   findAll(
     @Query('workspaceId') workspaceId: string,
   ) {
@@ -32,6 +32,7 @@ export class DocumentController {
   }
 
   @Post(':documentId')
+  @Permissions("EDIT", "DOCUMENT")
   @UseInterceptors(FileInterceptor('file'))
   uploadFile(
     @Param('documentId') documentId: string,
@@ -49,6 +50,7 @@ export class DocumentController {
   }
 
   @Patch(':documentId')
+  @Permissions("EDIT", "DOCUMENT")
   update(
     @Param('documentId') documentId: string, 
     @Body() updateDocumentDto: UpdateDocumentDto,
@@ -58,6 +60,7 @@ export class DocumentController {
   }
 
   @Delete(':documentId')
+  @Permissions("DELETE", "DOCUMENT")
   remove(
     @Param('documentId') documentId: string,
     @CurrentUser() user: UserDocument
