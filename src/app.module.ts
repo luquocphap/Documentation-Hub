@@ -21,6 +21,7 @@ import { DocumentModule } from './modules-api/document/document.module';
 import { DocumentMember, DocumentMemberSchema } from './modules-api/document/schemas/document-members.schema';
 import { DocumentRole, DocumentRoleSchema } from './modules-api/document/schemas/document-roles.schema';
 import { DocumentRoleSeeder } from './common/seeds/document-role.seed';
+import { PdfModule } from './modules-system/pdf/pdf.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { DocumentRoleSeeder } from './common/seeds/document-role.seed';
      WorkspaceModule,
      TokenModule,
      RedisModule,
+     PdfModule,
      MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: WorkspaceRole.name, schema: WorkspaceRoleSchema },

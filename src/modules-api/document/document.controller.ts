@@ -14,6 +14,7 @@ import { ApiBody, ApiConsumes } from '@nestjs/swagger';
 import { DocumentUploadDto } from './dto/document-upload.dto';
 import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
 import { Public } from 'src/common/decorators/public.decorator';
+import { CreateDocumentMarkdownDto } from './dto/create-document-markdown.dto';
 
 @Controller('document')
 export class DocumentController {
@@ -24,6 +25,14 @@ export class DocumentController {
     @Query('workspaceId', ParseMongoIdPipe) workspaceId: string,
   ) {
     return this.documentService.findAll(workspaceId);
+  }
+
+  @Post('from-markdown')
+  createFromMarkdown(
+    @Body() dto: CreateDocumentMarkdownDto,
+    @CurrentUser() user: UserDocument
+  ) {
+    return this.documentService.createFromMarkdown(dto, user);
   }
 
   @Post()

@@ -8,13 +8,18 @@ import { UserDocument } from '../auth/schemas/user.schema';
 import { CloudinaryService } from 'src/modules-system/cloudinary/cloudinary.service';
 import { DocumentMember } from './schemas/document-members.schema';
 import { DOCUMENT_ROLE_IDS } from 'src/common/seeds/document-role.seed';
+import MarkdownIt from 'markdown-it';
+import { PdfService } from 'src/modules-system/pdf/pdf.service';
+import { CreateDocumentMarkdownDto } from './dto/create-document-markdown.dto';
+import { generateHtmlDocument } from 'src/common/helpers/generate-html-document.helper';
 
 @Injectable()
 export class DocumentService {
   constructor(
     @InjectModel(DocumentModel.name) private readonly documentModel: Model<DocumentModel>,
     @InjectModel(DocumentMember.name) private readonly documentMemberModel: Model<DocumentMember>,
-    private readonly cloudinaryService: CloudinaryService
+    private readonly cloudinaryService: CloudinaryService,
+    private readonly pdfService: PdfService
   ) {}
   private async generateUniqueTitle(workspaceId: Types.ObjectId, baseTitle: string): Promise<string> {
     // Escape các ký tự đặc biệt của regex trong baseTitle
@@ -198,5 +203,55 @@ export class DocumentService {
     return {
       role: (member.roleId as any)?.name || 'Unknown'
     };
+  }
+
+  async createFromMarkdown(dto: CreateDocumentMarkdownDto, user: UserDocument) {
+    const { workspaceId, title, markdownContent } = dto;
+    const workspaceObjId = new Types.ObjectId(workspaceId);
+
+    // Kiểm tra chống trùng tên
+    const uniqueTitle = await this.generateUniqueTitle(workspaceObjId, title);
+
+    // Parse Markdown sang HTML và bọc CSS
+    const md = new MarkdownIt({ html: true, breaks: true, linkify: true });
+    const rawHtml = md.render(markdownContent);
+    const fullHtml = generateHtmlDocument(rawHtml);
+    
+    // Gọi PDF Service để lấy Buffer
+    const pdfBuffer = await this.pdfService.generatePdfFromHtml(fullHtml);
+
+    // Giả lập Multer File
+    const mockFile = {
+      fieldname: 'file',
+      originalname: `${uniqueTitle}.pdf`,
+      encoding: '7bit',
+      mimetype: 'application/pdf',
+      buffer: pdfBuffer,
+      size: pdfBuffer.length,
+    } as Express.Multer.File;
+
+    // Upload lên Cloudinary
+    const uploadResult = await this.cloudinaryService.uploadFile(mockFile);
+    if (!uploadResult || !uploadResult.public_id) {
+      throw new BadRequestException('Lỗi trong quá trình upload PDF lên đám mây');
+    }
+
+    // Lưu Database
+    const newDocument = await this.documentModel.create({
+      workspaceId: workspaceObjId,
+      title: uniqueTitle,
+      public_id: uploadResult.public_id,
+      createdBy: user._id
+    });
+
+    // Cấp quyền OWNER
+    await this.documentMemberModel.create({
+      documentId: newDocument._id,
+      userId: user._id,
+      roleId: DOCUMENT_ROLE_IDS.OWNER,
+      joinedAt: new Date()
+    });
+
+    return newDocument;
   }
 }
