@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { InjectModel } from '@nestjs/mongoose';
@@ -47,11 +47,12 @@ export class DocumentService {
   async findAll(workspaceId: string) {
     if (!workspaceId) throw new BadRequestException('Vui lòng cung cấp workspaceId');
 
+
     const documents = await this.documentModel.find({
       workspaceId: new Types.ObjectId(workspaceId),
       isDeleted: { $ne: true }
     })
-    .populate('createdBy', 'fullName')
+    .populate('createdBy', 'fullName _id')
     .sort({ updated_at: -1 }) // Mới nhất lên trước
     .exec();
 
@@ -59,6 +60,7 @@ export class DocumentService {
       id: doc._id,
       title: doc.title,
       ownerName: doc.createdBy?.fullName || 'Unknown',
+      ownerId: doc.createdBy?._id || "Unknown",
       updatedAt: doc.updated_at
     }));
   }
@@ -156,5 +158,24 @@ export class DocumentService {
     }
 
     return { message: 'Xóa tài liệu thành công' };
+  }
+
+  async getMyRole(documentId: string, user: UserDocument) {
+    // Tìm kiếm record thành viên của user trong document này
+    const member = await this.documentMemberModel.findOne({
+      documentId: new Types.ObjectId(documentId),
+      userId: user._id,
+      isDeleted: { $ne: true }
+    })
+    .populate('roleId', 'name')
+    .exec();
+
+    if (!member) {
+      throw new ForbiddenException('Bạn không có quyền truy cập tài liệu này hoặc tài liệu không tồn tại');
+    }
+
+    return {
+      role: (member.roleId as any)?.name || 'Unknown'
+    };
   }
 }

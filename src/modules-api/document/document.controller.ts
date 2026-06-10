@@ -10,15 +10,17 @@ import { User as CurrentUser } from 'src/common/decorators/user.decorator';
 import { type UserDocument } from '../auth/schemas/user.schema';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Permissions } from 'src/common/decorators/permission.decorator';
+import { ApiBody, ApiConsumes } from '@nestjs/swagger';
+import { DocumentUploadDto } from './dto/document-upload.dto';
+import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
 
 @Controller('document')
 export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
 
   @Get()
-  @Permissions("VIEW", "DOCUMENT")
   findAll(
-    @Query('workspaceId') workspaceId: string,
+    @Query('workspaceId', ParseMongoIdPipe) workspaceId: string,
   ) {
     return this.documentService.findAll(workspaceId);
   }
@@ -31,11 +33,24 @@ export class DocumentController {
     return this.documentService.create(createDocumentDto, user);
   }
 
+  @Get(':documentId/my-role')
+  getMyRole(
+    @Param('documentId', ParseMongoIdPipe) documentId: string,
+    @CurrentUser() user: UserDocument
+  ) {
+    return this.documentService.getMyRole(documentId, user);
+  }
+
   @Post(':documentId')
   @Permissions("EDIT", "DOCUMENT")
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('document_file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Document File',
+    type: DocumentUploadDto,
+  })
   uploadFile(
-    @Param('documentId') documentId: string,
+    @Param('documentId', ParseMongoIdPipe) documentId: string,
     @UploadedFile(
       new ParseFilePipe({
         validators: [
@@ -52,7 +67,7 @@ export class DocumentController {
   @Patch(':documentId')
   @Permissions("EDIT", "DOCUMENT")
   update(
-    @Param('documentId') documentId: string, 
+    @Param('documentId', ParseMongoIdPipe) documentId: string, 
     @Body() updateDocumentDto: UpdateDocumentDto,
     @CurrentUser() user: UserDocument
   ) {
@@ -62,7 +77,7 @@ export class DocumentController {
   @Delete(':documentId')
   @Permissions("DELETE", "DOCUMENT")
   remove(
-    @Param('documentId') documentId: string,
+    @Param('documentId', ParseMongoIdPipe) documentId: string,
     @CurrentUser() user: UserDocument
   ) {
     return this.documentService.remove(documentId, user);

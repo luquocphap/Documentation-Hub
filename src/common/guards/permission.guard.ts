@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -37,6 +37,10 @@ export class PermissionGuard implements CanActivate {
       const workspaceId = request.params?.workspaceId || request.query?.workspaceId || request.body?.workspaceId;
       if (!workspaceId) throw new ForbiddenException('Missing workspaceId in request');
 
+      if (!Types.ObjectId.isValid(workspaceId)) {
+        throw new NotFoundException('Workspace không tồn tại');
+      }
+
       const member = await this.workspaceMemberModel.findOne({
         userId: new Types.ObjectId(user._id),
         workspaceId: new Types.ObjectId(workspaceId as string),
@@ -58,6 +62,10 @@ export class PermissionGuard implements CanActivate {
     if (['DOCUMENT'].includes(resource)) {
       const documentId = request.params?.documentId || request.query?.documentId || request.body?.documentId;
       if (!documentId) throw new ForbiddenException('Missing documentId in request');
+
+      if (!Types.ObjectId.isValid(documentId)) {
+        throw new NotFoundException('Tài liệu không tồn tại');
+      }
 
       const member = await this.documentMemberModel.findOne({
         userId: new Types.ObjectId(user._id),

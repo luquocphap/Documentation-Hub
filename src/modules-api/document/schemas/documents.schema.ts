@@ -17,7 +17,7 @@ export class DocumentModel {
   @Prop({ required: true, trim: true, maxlength: 255 })
   title!: string;
 
-  @Prop({ required: true, trim: true })
+  @Prop({ trim: true })
   public_id!: string;
 
   @Prop({ type: Types.ObjectId, ref: User.name, required: true })
