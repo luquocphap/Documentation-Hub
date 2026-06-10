@@ -13,6 +13,7 @@ import { Permissions } from 'src/common/decorators/permission.decorator';
 import { ApiBody, ApiConsumes } from '@nestjs/swagger';
 import { DocumentUploadDto } from './dto/document-upload.dto';
 import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @Controller('document')
 export class DocumentController {
@@ -33,35 +34,27 @@ export class DocumentController {
     return this.documentService.create(createDocumentDto, user);
   }
 
+  @Post('webhook/cloudinary')
+  @Public()
+  handleCloudinaryWebhook(@Body() body: any) {
+    return this.documentService.handleCloudinaryWebhook(body);
+  }
+
+  @Get(':documentId/upload-signature')
+  @Permissions("EDIT", "DOCUMENT")
+  getUploadSignature(
+    @Param('documentId', ParseMongoIdPipe) documentId: string,
+    @CurrentUser() user: UserDocument
+  ) {
+    return this.documentService.getUploadSignature(documentId, user);
+  }
+
   @Get(':documentId/my-role')
   getMyRole(
     @Param('documentId', ParseMongoIdPipe) documentId: string,
     @CurrentUser() user: UserDocument
   ) {
     return this.documentService.getMyRole(documentId, user);
-  }
-
-  @Post(':documentId')
-  @Permissions("EDIT", "DOCUMENT")
-  @UseInterceptors(FileInterceptor('document_file'))
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    description: 'Document File',
-    type: DocumentUploadDto,
-  })
-  uploadFile(
-    @Param('documentId', ParseMongoIdPipe) documentId: string,
-    @UploadedFile(
-      new ParseFilePipe({
-        validators: [
-          new MaxFileSizeValidator({ maxSize: 20 * 1024 * 1024 }), // 20MB
-          new FileTypeValidator({ fileType: 'application/pdf' }), // Chỉ nhận PDF
-        ],
-      }),
-    ) file: Express.Multer.File,
-    @CurrentUser() user: UserDocument
-  ) {
-    return this.documentService.uploadFile(documentId, file, user);
   }
 
   @Patch(':documentId')

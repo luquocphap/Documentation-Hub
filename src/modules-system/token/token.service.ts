@@ -38,7 +38,6 @@ export class TokenService {
 
     verifyAccessToken(acccessToken: string, option?: jwt.VerifyOptions): TokenPayload {
         const decode = jwt.verify(acccessToken, ACCESS_TOKEN_SECRET as string, option) as TokenPayload;
-        console.log({decode})
         return decode
     }
     verifyRefreshToken(refreshToken: string, option?: jwt.VerifyOptions): TokenPayload {

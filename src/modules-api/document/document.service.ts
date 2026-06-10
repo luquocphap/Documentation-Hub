@@ -88,7 +88,8 @@ export class DocumentService {
     return newDocument;
   }
 
-  async uploadFile(documentId: string, file: Express.Multer.File, user: UserDocument) {
+  async getUploadSignature(documentId: string, user: UserDocument) {
+    // Check xem document tồn tại và user có quyền không (Guard đã check, nhưng check lại DB cho chắc)
     const document = await this.documentModel.findOne({
       _id: new Types.ObjectId(documentId),
       isDeleted: { $ne: true }
@@ -98,26 +99,46 @@ export class DocumentService {
       throw new NotFoundException('Tài liệu không tồn tại hoặc đã bị xóa');
     }
 
-    // Gửi file lên Cloudinary
-    const uploadResult = await this.cloudinaryService.uploadFile(file);
-    if (!uploadResult || !uploadResult.public_id) {
-      throw new BadRequestException('Upload tài liệu thất bại');
+    // Lấy thông số từ Cloudinary Service
+    const signatureData = this.cloudinaryService.generatePresignedSignature(documentId, user._id.toString());
+    
+    return signatureData;
+  }
+
+  //  Xử lý Webhook từ Cloudinary trả về
+  async handleCloudinaryWebhook(body: any) {
+    // Chỉ quan tâm đến event 'upload' thành công
+    if (body.notification_type !== 'upload') {
+      return { message: 'Ignored non-upload event' };
     }
 
-    // (Tùy chọn) Xóa file cũ trên Cloudinary nếu đang ghi đè file
-    if (document.public_id) {
-      await this.cloudinaryService.deleteFile(document.public_id).catch(e => console.error(e));
+    // Lấy dữ liệu context mà ta đã nhúng vào lúc sinh chữ ký
+    const documentId = body.context?.custom?.documentId;
+    const userId = body.context?.custom?.userId;
+    const public_id = body.public_id;
+
+    if (documentId && userId && public_id) {
+      const document = await this.documentModel.findOne({
+        _id: new Types.ObjectId(documentId),
+        isDeleted: { $ne: true }
+      });
+
+      if (document) {
+        // (Tùy chọn) Xóa file cũ trên Cloudinary để tránh rác nếu là hành động ghi đè
+        if (document.public_id) {
+          await this.cloudinaryService.deleteFile(document.public_id).catch(e => console.error('Lỗi xóa file cũ:', e));
+        }
+
+        // Cập nhật record với public_id mới và người cập nhật
+        document.public_id = public_id;
+        document.updatedBy = new Types.ObjectId(userId);
+        await document.save();
+        
+        console.log(`[Webhook] Cập nhật thành công file cho document: ${documentId}`);
+      }
     }
 
-    // Cập nhật record với thông tin file
-    document.public_id = uploadResult.public_id;
-    document.updatedBy = user._id as Types.ObjectId;
-    await document.save();
-
-    return {
-      message: 'Upload tài liệu thành công',
-      public_id: document.public_id
-    };
+    return { message: 'Webhook processed successfully' };
   }
 
   async update(documentId: string, updateDocumentDto: UpdateDocumentDto, user: UserDocument) {
