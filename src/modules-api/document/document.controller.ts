@@ -66,6 +66,14 @@ export class DocumentController {
     return this.documentService.getMyRole(documentId, user);
   }
 
+  @Get(':documentId')
+  @Permissions("VIEW", "DOCUMENT")
+  findOne(
+    @Param('documentId', ParseMongoIdPipe) documentId: string
+  ) {
+    return this.documentService.findOne(documentId);
+  }
+
   @Patch(':documentId')
   @Permissions("EDIT", "DOCUMENT")
   update(

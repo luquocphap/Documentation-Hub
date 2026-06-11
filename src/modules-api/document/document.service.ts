@@ -136,6 +136,7 @@ export class DocumentService {
 
         // Cập nhật record với public_id mới và người cập nhật
         document.public_id = public_id;
+        document.updatedAt = new Date();
         document.updatedBy = new Types.ObjectId(userId);
         await document.save();
         
@@ -253,5 +254,26 @@ export class DocumentService {
     });
 
     return newDocument;
+  }
+
+  async findOne(documentId: string) {
+    const document = await this.documentModel.findOne({
+      _id: new Types.ObjectId(documentId),
+      isDeleted: { $ne: true }
+    })
+    .exec();
+
+    if (!document) {
+      throw new NotFoundException('Tài liệu không tồn tại hoặc đã bị xóa');
+    }
+
+    return {
+      _id: document._id,
+      workspaceId: document.workspaceId,
+      title: document.title,
+      public_id: document.public_id,
+      createdAt: (document as any).created_at,
+      updatedAt: (document as any).updated_at,
+    };
   }
 }

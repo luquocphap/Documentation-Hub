@@ -26,6 +26,9 @@ export class DocumentModel {
   @Prop({ type: Types.ObjectId, ref: User.name, default: null })
   updatedBy!: Types.ObjectId | null;
 
+  @Prop({ type: Date, default: null })
+  updatedAt!: Date | null;
+
   @Prop({ type: Boolean, default: false, index: true })
   isDeleted!: boolean;
 
