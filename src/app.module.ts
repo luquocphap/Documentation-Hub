@@ -18,6 +18,10 @@ import { WorkspaceMember, WorkspaceMemberSchema } from './modules-api/workspace/
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { User, UserSchema } from './modules-api/auth/schemas/user.schema';
 import { DocumentModule } from './modules-api/document/document.module';
+import { DocumentMember, DocumentMemberSchema } from './modules-api/document/schemas/document-members.schema';
+import { DocumentRole, DocumentRoleSchema } from './modules-api/document/schemas/document-roles.schema';
+import { DocumentRoleSeeder } from './common/seeds/document-role.seed';
+import { PdfModule } from './modules-system/pdf/pdf.module';
 
 @Module({
   imports: [
@@ -27,10 +31,13 @@ import { DocumentModule } from './modules-api/document/document.module';
      WorkspaceModule,
      TokenModule,
      RedisModule,
+     PdfModule,
      MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: WorkspaceRole.name, schema: WorkspaceRoleSchema },
-      { name: WorkspaceMember.name, schema: WorkspaceMemberSchema }
+      { name: WorkspaceMember.name, schema: WorkspaceMemberSchema },
+      { name: DocumentMember.name, schema: DocumentMemberSchema },
+      { name: DocumentRole.name, schema: DocumentRoleSchema },
     ]),
      WorkspaceModule,
      DocumentModule,
@@ -39,6 +46,7 @@ import { DocumentModule } from './modules-api/document/document.module';
   providers: [
     AppService,
     WorkspaceRoleSeeder,
+    DocumentRoleSeeder,
     {
       provide: APP_GUARD,
       useClass: ProtectGuard
@@ -58,9 +66,13 @@ import { DocumentModule } from './modules-api/document/document.module';
   ],
 })
 export class AppModule implements OnApplicationBootstrap {
-  constructor(private readonly roleSeeder: WorkspaceRoleSeeder) {}
+  constructor(
+    private readonly roleSeeder: WorkspaceRoleSeeder,
+    private readonly documentRoleSeeder: DocumentRoleSeeder
+  ) {}
 
   async onApplicationBootstrap() {
     await this.roleSeeder.seed();
+    await this.documentRoleSeeder.seed();
   }
 }

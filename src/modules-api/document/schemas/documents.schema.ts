@@ -17,11 +17,17 @@ export class DocumentModel {
   @Prop({ required: true, trim: true, maxlength: 255 })
   title!: string;
 
+  @Prop({ trim: true })
+  public_id!: string;
+
   @Prop({ type: Types.ObjectId, ref: User.name, required: true })
   createdBy!: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: User.name, default: null })
   updatedBy!: Types.ObjectId | null;
+
+  @Prop({ type: Date, default: null })
+  updatedAt!: Date | null;
 
   @Prop({ type: Boolean, default: false, index: true })
   isDeleted!: boolean;

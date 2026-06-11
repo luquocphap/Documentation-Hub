@@ -7,6 +7,7 @@ import { Permissions } from 'src/common/decorators/permission.decorator';
 import { InviteMemberDto } from './dto/invite-memer.dto';
 import type { UserDocument } from '../auth/schemas/user.schema';
 import { ChangeRoleDto } from './dto/change-role.dto';
+import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
 
 @Controller('workspace')
 export class WorkspaceController {
@@ -56,7 +57,7 @@ export class WorkspaceController {
 
   @Get(':workspaceId')
   @Permissions('VIEW', 'WORKSPACE')
-  findOne(@Param('workspaceId') workspaceId: string, @CurrentUser() user: UserDocument) {
+  findOne(@Param('workspaceId', ParseMongoIdPipe) workspaceId: string, @CurrentUser() user: UserDocument) {
     return this.workspaceService.findOne(workspaceId, user);
   }
 

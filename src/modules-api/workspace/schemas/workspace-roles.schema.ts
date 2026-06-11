@@ -32,7 +32,7 @@ export class Permission {
 }
 
 @Schema({
-  collection: 'roles',
+  collection: 'workspace_roles',
   timestamps: false,
   versionKey: false,
 })
