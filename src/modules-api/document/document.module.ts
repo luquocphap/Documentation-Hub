@@ -7,6 +7,7 @@ import { DocumentModel, DocumentSchema } from './schemas/documents.schema';
 import { CloudinaryModule } from 'src/modules-system/cloudinary/cloudinary.module';
 import { DocumentMember, DocumentMemberSchema } from './schemas/document-members.schema';
 import { DocumentRole, DocumentRoleSchema } from './schemas/document-roles.schema';
+import { WorkspaceMember, WorkspaceMemberSchema } from '../workspace/schemas/workspace_members.schema';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { DocumentRole, DocumentRoleSchema } from './schemas/document-roles.schem
       { name: DocumentModel.name, schema: DocumentSchema },
       { name: DocumentMember.name, schema: DocumentMemberSchema },
       { name: DocumentRole.name, schema: DocumentRoleSchema },
+      { name: WorkspaceMember.name, schema: WorkspaceMemberSchema },
     ]),
     CloudinaryModule,
   ],

@@ -7,7 +7,7 @@ import { Model, Types } from 'mongoose';
 import { WorkspaceMember } from 'src/modules-api/workspace/schemas/workspace_members.schema';
 import { ROLE_IDS } from 'src/common/seeds/role.seed';
 import { InvitationStatus, WorkspaceInvitation } from 'src/modules-api/workspace/schemas/workspace-invitation.schema';
-import { OnEvent } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { WorkspaceRole } from 'src/modules-api/workspace/schemas/workspace-roles.schema';
 import { APP_URL } from 'src/common/constants/app.constant';
 import { sendWorkspaceInvitationEmail } from 'src/common/verify-email/send-workspace-invitation-email';
@@ -25,6 +25,7 @@ export class WorkspaceService {
     @InjectModel(User.name) private readonly userModel: Model<User>, 
     @InjectModel(WorkspaceRole.name) private readonly roleModel: Model<WorkspaceRole>,
     @InjectModel(DocumentModel.name) private readonly documentModel: Model<DocumentModel>,
+    private eventEmitter: EventEmitter2
   ) {}
   async create(createWorkspaceDto: CreateWorkspaceDto, user: UserDocument) {
     const { name, description } = createWorkspaceDto;
@@ -41,6 +42,11 @@ export class WorkspaceService {
       roleId: ROLE_IDS.ADMIN_WORKSPACE,
       workspaceName: newWorkspace.name,
       workspaceDescription: newWorkspace.description
+    });
+
+    this.eventEmitter.emit('workspace.member.added', { 
+      workspaceId: newWorkspace._id.toString(), 
+      userId: user._id.toString() 
     });
 
     return {
@@ -220,6 +226,11 @@ export class WorkspaceService {
         await this.workspaceModel.findByIdAndUpdate(invite.workspaceId, {
           $inc: { memberCount: 1 }
         });
+
+        this.eventEmitter.emit('workspace.member.added', { 
+          workspaceId: invite.workspaceId.toString(), 
+          userId: userId 
+        });
       }
 
       // Cập nhật trạng thái
@@ -292,6 +303,11 @@ export class WorkspaceService {
         inviterName: inviter.fullName,
         roleName: role.name,
         actionUrl: `${APP_URL}/workspaces/${workspaceId}` // Đi thẳng tới workspace
+      });
+
+      this.eventEmitter.emit('workspace.member.added', { 
+        workspaceId: workspaceId, 
+        userId: userExist._id.toString() 
       });
 
       return { message: 'Đã thêm thành viên trực tiếp vào Workspace và gửi email thông báo' };

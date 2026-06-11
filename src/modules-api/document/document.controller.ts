@@ -21,6 +21,7 @@ export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
 
   @Get()
+  @Permissions("VIEW", "WORKSPACE")
   findAll(
     @Query('workspaceId', ParseMongoIdPipe) workspaceId: string,
   ) {

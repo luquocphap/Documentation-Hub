@@ -12,14 +12,19 @@ import MarkdownIt from 'markdown-it';
 import { PdfService } from 'src/modules-system/pdf/pdf.service';
 import { CreateDocumentMarkdownDto } from './dto/create-document-markdown.dto';
 import { generateHtmlDocument } from 'src/common/helpers/generate-html-document.helper';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
+import { WorkspaceMember } from '../workspace/schemas/workspace_members.schema';
+import { Mode } from 'fs';
 
 @Injectable()
 export class DocumentService {
   constructor(
     @InjectModel(DocumentModel.name) private readonly documentModel: Model<DocumentModel>,
     @InjectModel(DocumentMember.name) private readonly documentMemberModel: Model<DocumentMember>,
+    @InjectModel(WorkspaceMember.name) private readonly workspaceMemberModel: Model<WorkspaceMember>,
     private readonly cloudinaryService: CloudinaryService,
-    private readonly pdfService: PdfService
+    private readonly pdfService: PdfService,
+    private eventEmitter: EventEmitter2 
   ) {}
   private async generateUniqueTitle(workspaceId: Types.ObjectId, baseTitle: string): Promise<string> {
     // Escape các ký tự đặc biệt của regex trong baseTitle
@@ -88,6 +93,13 @@ export class DocumentService {
       userId: user._id,
       roleId: DOCUMENT_ROLE_IDS.OWNER,
       joinedAt: new Date()
+    });
+
+    // Cấp quyền editor cho toàn bộ workspace members
+    this.eventEmitter.emit('document.created', {
+      documentId: newDocument._id.toString(),
+      workspaceId: workspaceId.toString(),
+      ownerId: user._id.toString()
     });
 
     return newDocument;
@@ -275,5 +287,62 @@ export class DocumentService {
       createdAt: (document as any).created_at,
       updatedAt: (document as any).updated_at,
     };
+  }
+
+  @OnEvent('document.created')
+  async handleDocumentCreated(payload: { documentId: string, workspaceId: string, ownerId: string }) {
+    const { documentId, workspaceId, ownerId } = payload;
+    
+    // Tìm tất cả thành viên của workspace
+    const members = await this.workspaceMemberModel.find({
+      workspaceId: new Types.ObjectId(workspaceId),
+      isDeleted: { $ne: true }
+    }).lean().exec();
+
+    // Lọc ra các thành viên không phải là người tạo
+    const docsToInsert = members
+      .filter(m => m.userId.toString() !== ownerId)
+      .map(m => ({
+        documentId: new Types.ObjectId(documentId),
+        userId: m.userId,
+        roleId: DOCUMENT_ROLE_IDS.EDITOR,
+        joinedAt: new Date()
+      }));
+
+    if (docsToInsert.length > 0) {
+      await this.documentMemberModel.insertMany(docsToInsert).catch(e => console.error('[Event Error]', e));
+    }
+  }
+
+  @OnEvent('workspace.member.added')
+  async handleWorkspaceMemberAdded(payload: { workspaceId: string, userId: string }) {
+    const { workspaceId, userId } = payload;
+
+    // Lấy toàn bộ Document đang có trong Workspace đó
+    const documents = await this.documentModel.find({
+      workspaceId: new Types.ObjectId(workspaceId),
+      isDeleted: { $ne: true }
+    }).select('_id').lean().exec();
+
+    if (documents.length === 0) return;
+
+    // Chuẩn bị lệnh bulkWrite (Upsert) để chống lỗi Duplicate Key nếu họ đã từng có quyền
+    const bulkOps = documents.map(doc => ({
+      updateOne: {
+        filter: { documentId: doc._id, userId: new Types.ObjectId(userId) },
+        update: { 
+          $setOnInsert: {
+            documentId: doc._id,
+            userId: new Types.ObjectId(userId),
+            roleId: DOCUMENT_ROLE_IDS.EDITOR,
+            joinedAt: new Date(),
+            isDeleted: false
+          }
+        },
+        upsert: true
+      }
+    }));
+
+    await this.documentMemberModel.bulkWrite(bulkOps).catch(e => console.error('[Event Error]', e));
   }
 }
