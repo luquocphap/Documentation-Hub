@@ -6,7 +6,7 @@ import { RegisterBody } from './dto/register.dto';
 import { Request } from 'express';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { sendVerifyEmail } from 'src/common/verify-email/send-verify-email';
+import { sendVerifyEmail } from 'src/common/email/send-verify-email';
 import crypto from "crypto";
 import { RedisService } from 'src/modules-system/redis/redis.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -253,7 +253,7 @@ export class AuthService {
     }
 
     async searchCandidates(query: SearchUserDto) {
-        const { email: keyword, workspaceId, documentId } = query;
+        const { keyword, workspaceId, documentId } = query;
 
         if (!keyword || keyword.trim() === '') {
             return [];

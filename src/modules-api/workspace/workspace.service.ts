@@ -10,7 +10,7 @@ import { InvitationStatus, WorkspaceInvitation } from 'src/modules-api/workspace
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { WorkspaceRole } from 'src/modules-api/workspace/schemas/workspace-roles.schema';
 import { APP_URL } from 'src/common/constants/app.constant';
-import { sendWorkspaceInvitationEmail } from 'src/common/verify-email/send-workspace-invitation-email';
+import { sendWorkspaceInvitationEmail } from 'src/common/email/send-workspace-invitation-email';
 import { User, UserDocument } from '../auth/schemas/user.schema';
 import { DocumentModel } from '../document/schemas/documents.schema';
 import { ChangeRoleDto } from './dto/change-role.dto';

@@ -4,7 +4,7 @@ import { UpdateDocumentDto } from './dto/update-document.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { DocumentModel } from './schemas/documents.schema';
 import { Model, Types } from 'mongoose';
-import { UserDocument } from '../auth/schemas/user.schema';
+import { User, UserDocument } from '../auth/schemas/user.schema';
 import { CloudinaryService } from 'src/modules-system/cloudinary/cloudinary.service';
 import { DocumentMember } from './schemas/document-members.schema';
 import { DOCUMENT_ROLE_IDS } from 'src/common/seeds/document-role.seed';
@@ -15,6 +15,10 @@ import { generateHtmlDocument } from 'src/common/helpers/generate-html-document.
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { WorkspaceMember } from '../workspace/schemas/workspace_members.schema';
 import { DocumentRole } from './schemas/document-roles.schema';
+import { DocumentInvitation, InvitationStatus } from './schemas/document-invitation.schemas';
+import { APP_URL } from 'src/common/constants/app.constant';
+import { InviteDocumentMemberDto } from './dto/invite-document-member.dto';
+import { sendDocumentInvitationEmail } from 'src/common/email/send-document-invitation-email';
 
 @Injectable()
 export class DocumentService {
@@ -22,14 +26,16 @@ export class DocumentService {
     @InjectModel(DocumentModel.name) private readonly documentModel: Model<DocumentModel>,
     @InjectModel(DocumentMember.name) private readonly documentMemberModel: Model<DocumentMember>,
     @InjectModel(WorkspaceMember.name) private readonly workspaceMemberModel: Model<WorkspaceMember>,
-    @InjectModel(DocumentRole.name) private readonly workspaceRoleModel: Model<DocumentRole>,
+    @InjectModel(DocumentRole.name) private readonly documentRoleModel: Model<DocumentRole>,
+    @InjectModel(DocumentInvitation.name) private invitationModel: Model<DocumentInvitation>,
+    @InjectModel(User.name) private readonly userModel: Model<User>,
     private readonly cloudinaryService: CloudinaryService,
     private readonly pdfService: PdfService,
     private eventEmitter: EventEmitter2 
   ) {}
 
   async getRoles() {
-    const roles = await this.workspaceRoleModel
+    const roles = await this.documentRoleModel
                                               .find()
                                               .select("-permissions")
                                               .lean()
@@ -300,6 +306,119 @@ export class DocumentService {
       createdAt: (document as any).created_at,
       updatedAt: (document as any).updated_at,
     };
+  }
+
+  async inviteMember(documentId: string, payload: InviteDocumentMemberDto, inviter: UserDocument) {
+    const { email, roleId } = payload;
+    const emailLower = email.toLowerCase();
+
+    const document = await this.documentModel.findOne({ _id: documentId, isDeleted: { $ne: true } }).exec();
+    if (!document) throw new NotFoundException('Tài liệu không tồn tại hoặc đã bị xóa');
+
+    const role = await this.documentRoleModel.findById(roleId).exec();
+    if (!role) throw new BadRequestException('Role không tồn tại');
+
+    const userExist = await this.userModel.findOne({ email: emailLower }).exec();
+
+    // TRƯỜNG HỢP 1: USER ĐÃ TỒN TẠI VÀ ĐÃ VERIFY
+    if (userExist && userExist.isEmailVerified) {
+      const isMember = await this.documentMemberModel.exists({
+        documentId,
+        userId: userExist._id,
+        isDeleted: { $ne: true }
+      });
+
+      if (isMember) throw new BadRequestException('Người dùng đã có quyền truy cập tài liệu này');
+
+      // Thêm vào document_members
+      await this.documentMemberModel.findOneAndUpdate(
+        {
+          documentId: new Types.ObjectId(documentId),
+          userId: new Types.ObjectId(userExist._id)
+        },
+        {
+          $set: {
+            roleId: new Types.ObjectId(roleId),
+            joinedAt: new Date(),
+            isDeleted: false
+          }
+        },
+        { upsert: true, returnDocument: 'after' }
+      ).exec();
+
+      // Gửi mail truy cập thẳng tài liệu
+      await sendDocumentInvitationEmail({
+        to: emailLower,
+        documentName: document.title,
+        inviterName: inviter.fullName,
+        roleName: role.name,
+        actionUrl: `${APP_URL}/document/${documentId}` // Link vào tài liệu
+      });
+
+      return { message: 'Đã thêm thành viên trực tiếp vào Tài liệu và gửi email thông báo' };
+    }
+
+    // TRƯỜNG HỢP 2: USER CHƯA TỒN TẠI HOẶC CHƯA VERIFY
+    const pendingInvite = await this.invitationModel.exists({
+      email: emailLower,
+      documentId,
+      status: InvitationStatus.PENDING,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (pendingInvite) throw new BadRequestException('Lời mời đã được gửi trước đó và đang chờ xác nhận');
+
+    // Lưu lời mời
+    await this.invitationModel.create({
+      email: emailLower,
+      documentId,
+      roleId,
+      inviterId: inviter._id
+    });
+
+    // Gửi mail mời đăng ký
+    await sendDocumentInvitationEmail({
+      to: emailLower,
+      documentName: document.title,
+      inviterName: inviter.fullName,
+      roleName: role.name,
+      actionUrl: `${APP_URL}/document/${documentId}`
+    });
+
+    return { message: 'Đã gửi lời mời tham gia qua email cho tài khoản chưa xác thực' };
+  }
+
+  // LẮNG NGHE EVENT KHI USER VERIFY EMAIL
+  @OnEvent('user.email.verified')
+  async handlePendingDocumentInvitationsAfterVerified(payload: { email: string, userId: string }) {
+    const { email, userId } = payload;
+    
+    const pendingInvites = await this.invitationModel.find({
+      email: email.toLowerCase(),
+      status: InvitationStatus.PENDING,
+      expiresAt: { $gt: new Date() }
+    }).exec();
+
+    if (pendingInvites.length === 0) return;
+
+    for (const invite of pendingInvites) {
+      const isMemberExist = await this.documentMemberModel.exists({
+        documentId: new Types.ObjectId(invite.documentId),
+        userId: new Types.ObjectId(userId)
+      });
+
+      if (!isMemberExist) {
+        await this.documentMemberModel.create({
+          documentId: new Types.ObjectId(invite.documentId),
+          userId: new Types.ObjectId(userId),
+          roleId: new Types.ObjectId(invite.roleId),
+          joinedAt: new Date()
+        });
+      }
+
+      invite.status = InvitationStatus.ACCEPTED;
+      await invite.save();
+    }
   }
 
   @OnEvent('document.created')

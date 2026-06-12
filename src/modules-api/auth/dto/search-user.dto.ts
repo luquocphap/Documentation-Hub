@@ -4,7 +4,7 @@ import { IsEmail, IsMongoId, IsOptional, IsString } from 'class-validator';
 export class SearchUserDto {
   @IsString()
   @ApiPropertyOptional({ description: 'Từ khóa email để tìm kiếm' })
-  email!: string;
+  keyword!: string;
 
   @IsOptional()
   @IsMongoId()

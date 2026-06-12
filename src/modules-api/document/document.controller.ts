@@ -15,6 +15,7 @@ import { DocumentUploadDto } from './dto/document-upload.dto';
 import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
 import { Public } from 'src/common/decorators/public.decorator';
 import { CreateDocumentMarkdownDto } from './dto/create-document-markdown.dto';
+import { InviteDocumentMemberDto } from './dto/invite-document-member.dto';
 
 @Controller('document')
 export class DocumentController {
@@ -71,6 +72,16 @@ export class DocumentController {
     @CurrentUser() user: UserDocument
   ) {
     return this.documentService.getMyRole(documentId, user);
+  }
+
+  @Post(':documentId/invite')
+  @Permissions("MANAGE_ACCESS", "DOCUMENT")
+  inviteMember(
+    @Param('documentId', ParseMongoIdPipe) documentId: string,
+    @Body() dto: InviteDocumentMemberDto,
+    @CurrentUser() user: UserDocument
+  ) {
+    return this.documentService.inviteMember(documentId, dto, user);
   }
 
   @Get(':documentId')
