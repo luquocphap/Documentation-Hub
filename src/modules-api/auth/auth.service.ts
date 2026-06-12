@@ -12,12 +12,17 @@ import { RedisService } from 'src/modules-system/redis/redis.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { User, UserDocument } from './schemas/user.schema';
 import { VerificationToken } from './schemas/verification-token.schema';
+import { SearchUserDto } from './dto/search-user.dto';
+import { WorkspaceMember } from '../workspace/schemas/workspace_members.schema';
+import { DocumentMember } from '../document/schemas/document-members.schema';
 
 @Injectable()
 export class AuthService {
     constructor(
         @InjectModel(User.name) private readonly userModel: Model<User>,
         @InjectModel(VerificationToken.name) private readonly verificationTokenModel: Model<VerificationToken>,
+        @InjectModel(WorkspaceMember.name) private readonly workspaceMemberModel: Model<WorkspaceMember>,
+        @InjectModel(DocumentMember.name) private readonly documentMemberModel: Model<DocumentMember>,
         private readonly redisService: RedisService,
         private readonly tokenService: TokenService,
         private eventEmitter: EventEmitter2
@@ -245,5 +250,62 @@ export class AuthService {
         return {
             message: 'Logout successfully',
         };
+    }
+
+    async searchCandidates(query: SearchUserDto) {
+        const { email: keyword, workspaceId, documentId } = query;
+
+        if (!keyword || keyword.trim() === '') {
+            return [];
+        }
+
+        // Tìm user khớp email
+        const users = await this.userModel
+            .find({ email: { $regex: keyword, $options: 'i' } })
+            .select('email fullName')
+            .limit(20)
+            .lean();
+
+        if (users.length === 0) return [];
+
+        const userIds = users.map(u => u._id);
+
+        // Chuẩn bị Set để check
+        let joinedWorkspaceSet = new Set<string>();
+        let joinedDocumentSet = new Set<string>();
+
+        // Nếu có workspaceId -> query xem ai đã join
+        if (workspaceId) {
+            const joinedWorkspaces = await this.workspaceMemberModel.find({
+                workspaceId: new Types.ObjectId(workspaceId),
+                userId: { $in: userIds },
+                isDeleted: { $ne: true }
+            }).select('userId').lean();
+            joinedWorkspaceSet = new Set(joinedWorkspaces.map(m => m.userId.toString()));
+        }
+
+        //  Nếu có documentId -> query xem ai đã join
+        if (documentId) {
+            const joinedDocuments = await this.documentMemberModel.find({
+                documentId: new Types.ObjectId(documentId),
+                userId: { $in: userIds },
+                isDeleted: { $ne: true }
+            }).select('userId').lean();
+            joinedDocumentSet = new Set(joinedDocuments.map(m => m.userId.toString()));
+        }
+
+        // Trả về kết quả
+        return users.map(user => {
+            const result: any = {
+                id: user._id,
+                email: user.email,
+                fullName: user.fullName,
+            };
+
+            if (workspaceId) result.inWorkspace = joinedWorkspaceSet.has(user._id.toString());
+            if (documentId) result.inDocument = joinedDocumentSet.has(user._id.toString());
+
+            return result;
+        });
     }
 }

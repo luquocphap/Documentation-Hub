@@ -8,6 +8,7 @@ import { User as CurrentUser } from 'src/common/decorators/user.decorator';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { NODE_ENV } from 'src/common/constants/app.constant';
 import type { UserDocument } from './schemas/user.schema';
+import { SearchUserDto } from './dto/search-user.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -99,5 +100,10 @@ export class AuthController {
     res.clearCookie('refreshToken');
 
     return result;
+  }
+
+  @Get("search-candidates")
+  async searchCandidates(@Query() query: SearchUserDto) {
+    return await this.authService.searchCandidates(query);
   }
 }
