@@ -8,6 +8,7 @@ import { CloudinaryModule } from 'src/modules-system/cloudinary/cloudinary.modul
 import { DocumentMember, DocumentMemberSchema } from './schemas/document-members.schema';
 import { DocumentRole, DocumentRoleSchema } from './schemas/document-roles.schema';
 import { WorkspaceMember, WorkspaceMemberSchema } from '../workspace/schemas/workspace_members.schema';
+import { WorkspaceRole, WorkspaceRoleSchema } from '../workspace/schemas/workspace-roles.schema';
 
 @Module({
   imports: [

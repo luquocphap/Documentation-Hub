@@ -20,6 +20,12 @@ import { CreateDocumentMarkdownDto } from './dto/create-document-markdown.dto';
 export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
 
+  @Get('/roles')
+  getRoles(){
+    return this.documentService.getRoles();
+  }
+
+
   @Get()
   @Permissions("VIEW", "WORKSPACE")
   findAll(

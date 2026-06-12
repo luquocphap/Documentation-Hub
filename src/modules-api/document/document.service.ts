@@ -14,7 +14,7 @@ import { CreateDocumentMarkdownDto } from './dto/create-document-markdown.dto';
 import { generateHtmlDocument } from 'src/common/helpers/generate-html-document.helper';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { WorkspaceMember } from '../workspace/schemas/workspace_members.schema';
-import { Mode } from 'fs';
+import { DocumentRole } from './schemas/document-roles.schema';
 
 @Injectable()
 export class DocumentService {
@@ -22,10 +22,23 @@ export class DocumentService {
     @InjectModel(DocumentModel.name) private readonly documentModel: Model<DocumentModel>,
     @InjectModel(DocumentMember.name) private readonly documentMemberModel: Model<DocumentMember>,
     @InjectModel(WorkspaceMember.name) private readonly workspaceMemberModel: Model<WorkspaceMember>,
+    @InjectModel(DocumentRole.name) private readonly workspaceRoleModel: Model<DocumentRole>,
     private readonly cloudinaryService: CloudinaryService,
     private readonly pdfService: PdfService,
     private eventEmitter: EventEmitter2 
   ) {}
+
+  async getRoles() {
+    const roles = await this.workspaceRoleModel
+                                              .find()
+                                              .select("-permissions")
+                                              .lean()
+                                              .exec();
+
+
+    return roles;
+  }
+
   private async generateUniqueTitle(workspaceId: Types.ObjectId, baseTitle: string): Promise<string> {
     // Escape các ký tự đặc biệt của regex trong baseTitle
     const escapedTitle = baseTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
