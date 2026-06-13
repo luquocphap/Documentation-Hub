@@ -16,6 +16,7 @@ import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
 import { Public } from 'src/common/decorators/public.decorator';
 import { CreateDocumentMarkdownDto } from './dto/create-document-markdown.dto';
 import { InviteDocumentMemberDto } from './dto/invite-document-member.dto';
+import { ChangeDocumentRoleDto } from './dto/change-document-role.dto';
 
 @Controller('document')
 export class DocumentController {
@@ -82,6 +83,32 @@ export class DocumentController {
     @CurrentUser() user: UserDocument
   ) {
     return this.documentService.inviteMember(documentId, dto, user);
+  }
+
+  @Get(':documentId/external-members')
+  @Permissions('VIEW', 'DOCUMENT')
+  async getExternalMembers(
+    @Param('documentId', ParseMongoIdPipe) documentId: string,
+  ) {
+    return this.documentService.getExternalMembers(documentId);
+  }
+
+  @Delete(':documentId/external-members/:userId')
+  @Permissions('MANAGE_ACCESS', 'DOCUMENT')
+  async removeExternalMember(
+    @Param('documentId', ParseMongoIdPipe) documentId: string,
+    @Param('userId', ParseMongoIdPipe) userId: string,
+  ) {
+    return this.documentService.removeExternalMember(documentId, userId);
+  }
+
+  @Patch(':documentId/change-role')
+  @Permissions('MANAGE_ACCESS', 'DOCUMENT')
+  async changeMemberRole(
+    @Param('documentId', ParseMongoIdPipe) documentId: string,
+    @Body() dto: ChangeDocumentRoleDto,
+  ) {
+    return this.documentService.changeMemberRole(documentId, dto);
   }
 
   @Get(':documentId')
