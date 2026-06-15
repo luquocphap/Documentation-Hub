@@ -4,10 +4,10 @@ import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
 import { User as CurrentUser } from 'src/common/decorators/user.decorator';
 import { Permissions } from 'src/common/decorators/permission.decorator';
-import { InviteMemberDto } from './dto/invite-memer.dto';
 import type { UserDocument } from '../auth/schemas/user.schema';
 import { ChangeRoleDto } from './dto/change-role.dto';
 import { ParseMongoIdPipe } from 'src/common/pipes/parse-mongo-id.pipe';
+import { InviteMemberDto } from './dto/invite-memer.dto';
 
 @Controller('workspace')
 export class WorkspaceController {
@@ -81,14 +81,5 @@ export class WorkspaceController {
     @CurrentUser() user: UserDocument
   ) {
     return this.workspaceService.inviteMember(workspaceId, inviteMemberDto, user);
-  }
-
-  @Get(':workspaceId/member-candidates')
-  @Permissions('INVITE', 'MEMBER')
-  async getMemberCandidates(
-    @Param('workspaceId') workspaceId: string,
-    @Query('email') keyword: string,
-  ) {
-    return this.workspaceService.getMemberCandidates(workspaceId, keyword);
   }
 }

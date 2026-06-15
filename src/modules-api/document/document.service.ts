@@ -4,7 +4,7 @@ import { UpdateDocumentDto } from './dto/update-document.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { DocumentModel } from './schemas/documents.schema';
 import { Model, Types } from 'mongoose';
-import { UserDocument } from '../auth/schemas/user.schema';
+import { User, UserDocument } from '../auth/schemas/user.schema';
 import { CloudinaryService } from 'src/modules-system/cloudinary/cloudinary.service';
 import { DocumentMember } from './schemas/document-members.schema';
 import { DOCUMENT_ROLE_IDS } from 'src/common/seeds/document-role.seed';
@@ -14,7 +14,13 @@ import { CreateDocumentMarkdownDto } from './dto/create-document-markdown.dto';
 import { generateHtmlDocument } from 'src/common/helpers/generate-html-document.helper';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { WorkspaceMember } from '../workspace/schemas/workspace_members.schema';
-import { Mode } from 'fs';
+import { DocumentRole } from './schemas/document-roles.schema';
+import { DocumentInvitation, InvitationStatus } from './schemas/document-invitation.schemas';
+import { APP_URL } from 'src/common/constants/app.constant';
+import { InviteDocumentMemberDto } from './dto/invite-document-member.dto';
+import { sendDocumentInvitationEmail } from 'src/common/email/send-document-invitation-email';
+import { ChangeDocumentRoleDto } from './dto/change-document-role.dto';
+import { WorkspaceRole } from '../workspace/schemas/workspace-roles.schema';
 
 @Injectable()
 export class DocumentService {
@@ -22,10 +28,25 @@ export class DocumentService {
     @InjectModel(DocumentModel.name) private readonly documentModel: Model<DocumentModel>,
     @InjectModel(DocumentMember.name) private readonly documentMemberModel: Model<DocumentMember>,
     @InjectModel(WorkspaceMember.name) private readonly workspaceMemberModel: Model<WorkspaceMember>,
+    @InjectModel(DocumentRole.name) private readonly documentRoleModel: Model<DocumentRole>,
+    @InjectModel(DocumentInvitation.name) private invitationModel: Model<DocumentInvitation>,
+    @InjectModel(User.name) private readonly userModel: Model<User>,
     private readonly cloudinaryService: CloudinaryService,
     private readonly pdfService: PdfService,
     private eventEmitter: EventEmitter2 
   ) {}
+
+  async getRoles() {
+    const roles = await this.documentRoleModel
+                                              .find()
+                                              .select("-permissions")
+                                              .lean()
+                                              .exec();
+
+
+    return roles;
+  }
+
   private async generateUniqueTitle(workspaceId: Types.ObjectId, baseTitle: string): Promise<string> {
     // Escape các ký tự đặc biệt của regex trong baseTitle
     const escapedTitle = baseTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -287,6 +308,227 @@ export class DocumentService {
       createdAt: (document as any).created_at,
       updatedAt: (document as any).updated_at,
     };
+  }
+
+  async inviteMember(documentId: string, payload: InviteDocumentMemberDto, inviter: UserDocument) {
+    const { email, roleId } = payload;
+    const emailLower = email.toLowerCase();
+
+    const document = await this.documentModel.findOne({ _id: documentId, isDeleted: { $ne: true } }).exec();
+    if (!document) throw new NotFoundException('Tài liệu không tồn tại hoặc đã bị xóa');
+
+    const role = await this.documentRoleModel.findById(roleId).exec();
+    if (!role) throw new BadRequestException('Role không tồn tại');
+
+    const userExist = await this.userModel.findOne({ email: emailLower }).exec();
+
+    // TRƯỜNG HỢP 1: USER ĐÃ TỒN TẠI VÀ ĐÃ VERIFY
+    if (userExist && userExist.isEmailVerified) {
+      const isMember = await this.documentMemberModel.exists({
+        documentId,
+        userId: userExist._id,
+        isDeleted: { $ne: true }
+      });
+
+      if (isMember) throw new BadRequestException('Người dùng đã có quyền truy cập tài liệu này');
+
+      // Thêm vào document_members
+      await this.documentMemberModel.findOneAndUpdate(
+        {
+          documentId: new Types.ObjectId(documentId),
+          userId: new Types.ObjectId(userExist._id)
+        },
+        {
+          $set: {
+            roleId: new Types.ObjectId(roleId),
+            joinedAt: new Date(),
+            isDeleted: false
+          }
+        },
+        { upsert: true, returnDocument: 'after' }
+      ).exec();
+
+      // Gửi mail truy cập thẳng tài liệu
+      await sendDocumentInvitationEmail({
+        to: emailLower,
+        documentName: document.title,
+        inviterName: inviter.fullName,
+        roleName: role.name,
+        actionUrl: `${APP_URL}/document/${documentId}` // Link vào tài liệu
+      });
+
+      return { message: 'Đã thêm thành viên trực tiếp vào Tài liệu và gửi email thông báo' };
+    }
+
+    // TRƯỜNG HỢP 2: USER CHƯA TỒN TẠI HOẶC CHƯA VERIFY
+    const pendingInvite = await this.invitationModel.exists({
+      email: emailLower,
+      documentId,
+      status: InvitationStatus.PENDING,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (pendingInvite) throw new BadRequestException('Lời mời đã được gửi trước đó và đang chờ xác nhận');
+
+    // Lưu lời mời
+    await this.invitationModel.create({
+      email: emailLower,
+      documentId,
+      roleId,
+      inviterId: inviter._id
+    });
+
+    // Gửi mail mời đăng ký
+    await sendDocumentInvitationEmail({
+      to: emailLower,
+      documentName: document.title,
+      inviterName: inviter.fullName,
+      roleName: role.name,
+      actionUrl: `${APP_URL}/document/${documentId}`
+    });
+
+    return { message: 'Đã gửi lời mời tham gia qua email cho tài khoản chưa xác thực' };
+  }
+
+  // LẮNG NGHE EVENT KHI USER VERIFY EMAIL
+  @OnEvent('user.email.verified')
+  async handlePendingDocumentInvitationsAfterVerified(payload: { email: string, userId: string }) {
+    const { email, userId } = payload;
+    
+    const pendingInvites = await this.invitationModel.find({
+      email: email.toLowerCase(),
+      status: InvitationStatus.PENDING,
+      expiresAt: { $gt: new Date() }
+    }).exec();
+
+    if (pendingInvites.length === 0) return;
+
+    for (const invite of pendingInvites) {
+      const isMemberExist = await this.documentMemberModel.exists({
+        documentId: new Types.ObjectId(invite.documentId),
+        userId: new Types.ObjectId(userId)
+      });
+
+      if (!isMemberExist) {
+        await this.documentMemberModel.create({
+          documentId: new Types.ObjectId(invite.documentId),
+          userId: new Types.ObjectId(userId),
+          roleId: new Types.ObjectId(invite.roleId),
+          joinedAt: new Date()
+        });
+      }
+
+      invite.status = InvitationStatus.ACCEPTED;
+      await invite.save();
+    }
+  }
+
+  async getExternalMembers(documentId: string) {
+    // Kiểm tra tài liệu tồn tại
+    const document = await this.documentModel.findOne({
+      _id: new Types.ObjectId(documentId),
+      isDeleted: { $ne: true }
+    }).exec();
+
+    if (!document) {
+      throw new NotFoundException('Tài liệu không tồn tại hoặc đã bị xóa');
+    }
+
+    // Lấy danh sách toàn bộ userId thuộc Workspace chứa tài liệu này
+    const workspaceMembers = await this.workspaceMemberModel.find({
+      workspaceId: document.workspaceId,
+      isDeleted: { $ne: true }
+    }).select('userId').lean().exec();
+
+    const workspaceUserIds = new Set(workspaceMembers.map(m => m.userId.toString()));
+
+    // Lấy toàn bộ thành viên của Document và populate thông tin cần thiết
+    const documentMembers = await this.documentMemberModel.find({
+      documentId: document._id,
+      isDeleted: { $ne: true }
+    })
+    .populate('userId', 'fullName email')
+    .populate('roleId', 'name')
+    .lean()
+    .exec();
+
+    // Lọc ra những thành viên document KHÔNG nằm trong Workspace
+    const externalMembers = documentMembers.filter(m => {
+      if (!m.userId) return false;
+      const userIdStr = m.userId._id?.toString();
+      return !workspaceUserIds.has(userIdStr);
+    });
+
+    // Map dữ liệu trả về theo đúng cấu trúc yêu cầu
+    return externalMembers.map((m: any) => ({
+      userId: m.userId?._id,
+      fullName: m.userId?.fullName,
+      email: m.userId?.email,
+      roleId: m.roleId?._id,
+      roleName: m.roleId?.name
+    }));
+  }
+
+  async removeExternalMember(documentId: string, userId: string) {
+    const document = await this.documentModel.findOne({
+      _id: new Types.ObjectId(documentId),
+      isDeleted: { $ne: true }
+    }).exec();
+
+    if (!document) {
+      throw new NotFoundException('Tài liệu không tồn tại hoặc đã bị xóa');
+    }
+
+    const targetMember = await this.documentMemberModel.findOne({
+      documentId: document._id,
+      userId: new Types.ObjectId(userId),
+      isDeleted: { $ne: true }
+    }).exec();
+
+    const workspaceMember = await this.workspaceMemberModel.exists({
+      workspaceId: document.workspaceId,
+      userId: new Types.ObjectId(userId),
+      isDeleted: { $ne: true }
+    });
+
+    if (!targetMember || workspaceMember) {
+      throw new ForbiddenException('Người dùng này không phải external member của tài liệu');
+    }
+
+    await this.documentMemberModel.findByIdAndUpdate(targetMember._id, {
+      $set: { isDeleted: true }
+    }).exec();
+
+    return { message: 'Đã xóa external member khỏi tài liệu thành công' };
+  }
+
+  async changeMemberRole(documentId: string, payload: ChangeDocumentRoleDto) {
+    const { userId, roleId } = payload;
+
+    // Kiểm tra xem Document Role truyền lên có tồn tại hay không
+    const roleExist = await this.documentRoleModel.findById(roleId).exec();
+    if (!roleExist) {
+      throw new BadRequestException('Vai trò tài liệu không tồn tại');
+    }
+
+    // Cập nhật trường roleId mới cho thành viên thuộc documentId và userId tương ứng
+    const updatedMember = await this.documentMemberModel.findOneAndUpdate(
+      {
+        documentId: new Types.ObjectId(documentId),
+        userId: new Types.ObjectId(userId),
+        isDeleted: { $ne: true },
+      },
+      { 
+        $set: { roleId: new Types.ObjectId(roleId) } 
+      },
+      { returnDocument: 'after' }
+    ).exec();
+
+    if (!updatedMember) {
+      throw new NotFoundException('Không tìm thấy thành viên này trong tài liệu hoặc quyền truy cập đã bị hủy');
+    }
+
+    return { message: 'Cập nhật vai trò thành viên đối với tài liệu thành công' };
   }
 
   @OnEvent('document.created')

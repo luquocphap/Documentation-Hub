@@ -10,11 +10,11 @@ import { InvitationStatus, WorkspaceInvitation } from 'src/modules-api/workspace
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { WorkspaceRole } from 'src/modules-api/workspace/schemas/workspace-roles.schema';
 import { APP_URL } from 'src/common/constants/app.constant';
-import { sendWorkspaceInvitationEmail } from 'src/common/verify-email/send-workspace-invitation-email';
-import { InviteMemberDto } from './dto/invite-memer.dto';
+import { sendWorkspaceInvitationEmail } from 'src/common/email/send-workspace-invitation-email';
 import { User, UserDocument } from '../auth/schemas/user.schema';
 import { DocumentModel } from '../document/schemas/documents.schema';
 import { ChangeRoleDto } from './dto/change-role.dto';
+import { InviteMemberDto } from './dto/invite-memer.dto';
 
 @Injectable()
 export class WorkspaceService {
@@ -344,40 +344,6 @@ export class WorkspaceService {
     });
 
     return { message: 'Đã gửi lời mời tham gia qua email cho tài khoản chưa xác thực' };
-  }
-
-  async getMemberCandidates(workspaceId: string, keyword: string) {
-    if (!keyword || keyword.trim() === '') {
-      throw new BadRequestException('Vui lòng cung cấp từ khóa email');
-    }
-
-    // 1. Tìm danh sách users khớp với email keyword
-    const users = await this.userModel
-      .find({ email: { $regex: keyword, $options: 'i' } })
-      .select('email fullName')
-      .limit(20)
-      .lean();
-
-    if (users.length === 0) return [];
-
-    const userIds = users.map(u => u._id);
-
-    // 2. Query nhanh bảng member xem ai đã join rồi
-    const joinedMembers = await this.workspaceMemberModel.find({
-      workspaceId: new Types.ObjectId(workspaceId),
-      userId: { $in: userIds },
-      isDeleted: { $ne: true }
-    }).select('userId').lean();
-
-    const joinedUserIdsSet = new Set(joinedMembers.map(m => m.userId.toString()));
-
-    // 3. Map dữ liệu để trả ra trạng thái kèm theo
-    return users.map(user => ({
-      id: user._id,
-      email: user.email,
-      fullName: user.fullName,
-      isJoined: joinedUserIdsSet.has(user._id.toString())
-    }));
   }
 
   async getWorkspaceRoles() {
