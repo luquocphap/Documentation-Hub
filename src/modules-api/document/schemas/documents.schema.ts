@@ -11,7 +11,12 @@ export type DocumentModelDocument = HydratedDocument<DocumentModel>;
   versionKey: false,
 })
 export class DocumentModel {
-  @Prop({ type: Types.ObjectId, ref: Workspace.name, required: true, index: true })
+  @Prop({
+    type: Types.ObjectId,
+    ref: Workspace.name,
+    required: true,
+    index: true,
+  })
   workspaceId!: Types.ObjectId;
 
   @Prop({ required: true, trim: true, maxlength: 255 })
@@ -19,6 +24,9 @@ export class DocumentModel {
 
   @Prop({ trim: true })
   public_id!: string;
+
+  @Prop({ trim: true, maxlength: 10000, default: '' })
+  content!: string;
 
   @Prop({ type: Types.ObjectId, ref: User.name, required: true })
   createdBy!: Types.ObjectId;
