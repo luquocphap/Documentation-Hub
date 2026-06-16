@@ -47,19 +47,13 @@ export class DocumentAnnotation {
   xfdf!: string | null;
 
   @Prop({ type: Types.ObjectId, ref: User.name, required: true })
-  createdBy!: Types.ObjectId;
-
-  @Prop({ type: Types.ObjectId, ref: User.name, default: null })
-  updatedBy!: Types.ObjectId | null;
+  owner!: Types.ObjectId;
 
   @Prop({ type: Boolean, default: false, index: true })
   isDeleted!: boolean;
 
   @Prop({ type: Date, default: null })
   deletedAt!: Date | null;
-
-  @Prop({ type: Types.ObjectId, ref: User.name, default: null })
-  deletedBy!: Types.ObjectId | null;
 }
 
 export const DocumentAnnotationSchema =

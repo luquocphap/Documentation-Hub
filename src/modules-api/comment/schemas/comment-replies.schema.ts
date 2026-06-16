@@ -23,13 +23,16 @@ export class CommentReply {
   text!: string;
 
   @Prop({ type: Types.ObjectId, ref: User.name, required: true })
-  createdBy!: Types.ObjectId;
+  owner!: Types.ObjectId;
 
   @Prop({ type: Boolean, default: false, index: true })
   isDeleted!: boolean;
 
   @Prop({ type: Date, default: null })
   deletedAt!: Date | null;
+
+  @Prop({ type: Boolean, default: false })
+  isUpdated!: boolean;
 }
 
 export const CommentReplySchema = SchemaFactory.createForClass(CommentReply);
