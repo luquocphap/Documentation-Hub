@@ -10,39 +10,53 @@ import { TokenModule } from './modules-system/token/token.module';
 import { DatabaseModule } from './modules-system/database/database.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { RedisModule } from './modules-system/redis/redis.module';
-import { WorkspaceRole, WorkspaceRoleSchema } from './modules-api/workspace/schemas/workspace-roles.schema';
+import {
+  WorkspaceRole,
+  WorkspaceRoleSchema,
+} from './modules-api/workspace/schemas/workspace-roles.schema';
 import { WorkspaceModule } from './modules-api/workspace/workspace.module';
 import { WorkspaceRoleSeeder } from './common/seeds/role.seed';
 import { PermissionGuard } from './common/guards/permission.guard';
-import { WorkspaceMember, WorkspaceMemberSchema } from './modules-api/workspace/schemas/workspace_members.schema';
+import {
+  WorkspaceMember,
+  WorkspaceMemberSchema,
+} from './modules-api/workspace/schemas/workspace_members.schema';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { User, UserSchema } from './modules-api/auth/schemas/user.schema';
 import { DocumentModule } from './modules-api/document/document.module';
-import { DocumentMember, DocumentMemberSchema } from './modules-api/document/schemas/document-members.schema';
-import { DocumentRole, DocumentRoleSchema } from './modules-api/document/schemas/document-roles.schema';
+import {
+  DocumentMember,
+  DocumentMemberSchema,
+} from './modules-api/document/schemas/document-members.schema';
+import {
+  DocumentRole,
+  DocumentRoleSchema,
+} from './modules-api/document/schemas/document-roles.schema';
 import { DocumentRoleSeeder } from './common/seeds/document-role.seed';
 import { PdfModule } from './modules-system/pdf/pdf.module';
 import { CommentModule } from './modules-api/comment/document.module';
+import { SearchModule } from './modules-api/search/search.module';
 
 @Module({
   imports: [
-     EventEmitterModule.forRoot(),
-     DatabaseModule,
-     AuthModule,
-     TokenModule,
-     RedisModule,
-     PdfModule,
-     MongooseModule.forFeature([
+    EventEmitterModule.forRoot(),
+    DatabaseModule,
+    AuthModule,
+    TokenModule,
+    RedisModule,
+    PdfModule,
+    MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: WorkspaceRole.name, schema: WorkspaceRoleSchema },
       { name: WorkspaceMember.name, schema: WorkspaceMemberSchema },
       { name: DocumentMember.name, schema: DocumentMemberSchema },
       { name: DocumentRole.name, schema: DocumentRoleSchema },
     ]),
-     WorkspaceModule,
-     DocumentModule,
-     CommentModule,
-    ],
+    WorkspaceModule,
+    DocumentModule,
+    CommentModule,
+    SearchModule,
+  ],
   controllers: [AppController],
   providers: [
     AppService,
@@ -50,26 +64,26 @@ import { CommentModule } from './modules-api/comment/document.module';
     DocumentRoleSeeder,
     {
       provide: APP_GUARD,
-      useClass: ProtectGuard
+      useClass: ProtectGuard,
     },
     {
       provide: APP_GUARD,
-      useClass: PermissionGuard
+      useClass: PermissionGuard,
     },
     {
       provide: APP_INTERCEPTOR,
-      useClass: LoggingInterceptor
+      useClass: LoggingInterceptor,
     },
     {
       provide: APP_INTERCEPTOR,
-      useClass: ResponseSuccessInterceptor
-    }
+      useClass: ResponseSuccessInterceptor,
+    },
   ],
 })
 export class AppModule implements OnApplicationBootstrap {
   constructor(
     private readonly roleSeeder: WorkspaceRoleSeeder,
-    private readonly documentRoleSeeder: DocumentRoleSeeder
+    private readonly documentRoleSeeder: DocumentRoleSeeder,
   ) {}
 
   async onApplicationBootstrap() {
