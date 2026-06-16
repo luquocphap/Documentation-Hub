@@ -22,13 +22,13 @@ import { DocumentMember, DocumentMemberSchema } from './modules-api/document/sch
 import { DocumentRole, DocumentRoleSchema } from './modules-api/document/schemas/document-roles.schema';
 import { DocumentRoleSeeder } from './common/seeds/document-role.seed';
 import { PdfModule } from './modules-system/pdf/pdf.module';
+import { CommentModule } from './modules-api/comment/document.module';
 
 @Module({
   imports: [
      EventEmitterModule.forRoot(),
      DatabaseModule,
      AuthModule,
-     WorkspaceModule,
      TokenModule,
      RedisModule,
      PdfModule,
@@ -41,6 +41,7 @@ import { PdfModule } from './modules-system/pdf/pdf.module';
     ]),
      WorkspaceModule,
      DocumentModule,
+     CommentModule,
     ],
   controllers: [AppController],
   providers: [
