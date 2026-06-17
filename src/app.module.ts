@@ -36,6 +36,15 @@ import { DocumentRoleSeeder } from './common/seeds/document-role.seed';
 import { PdfModule } from './modules-system/pdf/pdf.module';
 import { CommentModule } from './modules-api/comment/document.module';
 import { SearchModule } from './modules-api/search/search.module';
+import {
+  ActionCategory,
+  ActionCategorySchema,
+} from './modules-api/activity/schemas/action_categories.schema';
+import {
+  Action,
+  ActionSchema,
+} from './modules-api/activity/schemas/actions.schema';
+import { ActivityActionSeeder } from './common/seeds/activity-action.seed';
 
 @Module({
   imports: [
@@ -51,6 +60,8 @@ import { SearchModule } from './modules-api/search/search.module';
       { name: WorkspaceMember.name, schema: WorkspaceMemberSchema },
       { name: DocumentMember.name, schema: DocumentMemberSchema },
       { name: DocumentRole.name, schema: DocumentRoleSchema },
+      { name: ActionCategory.name, schema: ActionCategorySchema },
+      { name: Action.name, schema: ActionSchema },
     ]),
     WorkspaceModule,
     DocumentModule,
@@ -62,6 +73,7 @@ import { SearchModule } from './modules-api/search/search.module';
     AppService,
     WorkspaceRoleSeeder,
     DocumentRoleSeeder,
+    ActivityActionSeeder,
     {
       provide: APP_GUARD,
       useClass: ProtectGuard,
@@ -84,10 +96,12 @@ export class AppModule implements OnApplicationBootstrap {
   constructor(
     private readonly roleSeeder: WorkspaceRoleSeeder,
     private readonly documentRoleSeeder: DocumentRoleSeeder,
+    private readonly activityActionSeeder: ActivityActionSeeder,
   ) {}
 
   async onApplicationBootstrap() {
     await this.roleSeeder.seed();
     await this.documentRoleSeeder.seed();
+    await this.activityActionSeeder.seed();
   }
 }

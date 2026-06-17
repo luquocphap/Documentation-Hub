@@ -1,4 +1,7 @@
-import { Prop, Schema } from "@nestjs/mongoose";
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { HydratedDocument, Types } from "mongoose";
+
+export type ActionDocument = HydratedDocument<Action>;
 
 @Schema({
     collection: 'actions',
@@ -10,4 +13,13 @@ export class Action {
         required: true,
     })
     action!: string;
+
+    @Prop({
+        type: Types.ObjectId,
+        required: true,
+    })
+    categoryId!: Types.ObjectId;
 }
+
+export const ActionSchema =
+  SchemaFactory.createForClass(Action);
