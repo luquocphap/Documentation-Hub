@@ -29,7 +29,7 @@ function parseDate(value: unknown): Date | null {
 
 export const buildQueryMongoose = (req: Request) => {
   const pageDefault = 1;
-  const pageSizeDefault = 10;
+  const pageSizeDefault = 20;
   const maxPageSize = 50;
 
   let page = Number(req.query.page) || pageDefault;
