@@ -2,10 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Request } from 'express';
 import { Model, Types } from 'mongoose';
-import { buildQueryMongoose } from 'src/common/helpers/build-query-mongoose.helper';
 import { type UserDocument } from '../auth/schemas/user.schema';
 import { DocumentMember } from '../document/schemas/document-members.schema';
 import { DocumentModel } from '../document/schemas/documents.schema';
+import { buildQueryDocuments } from 'src/common/helpers/build-query-documents.helper';
 
 @Injectable()
 export class SearchService {
@@ -18,7 +18,7 @@ export class SearchService {
 
   async searchDocuments(req: Request, user: UserDocument) {
     const { page, pageSize, skip, limit, filter, sort } =
-      buildQueryMongoose(req);
+      buildQueryDocuments(req);
     const keyword = this.getSearchKeyword(req);
 
     const accessibleDocumentIds = await this.documentMemberModel
