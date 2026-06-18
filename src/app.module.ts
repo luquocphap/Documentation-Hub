@@ -45,6 +45,7 @@ import {
   ActionSchema,
 } from './modules-api/activity/schemas/actions.schema';
 import { ActivityActionSeeder } from './common/seeds/activity-action.seed';
+import { ActivityModule } from './modules-api/activity/activity.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { ActivityActionSeeder } from './common/seeds/activity-action.seed';
     DocumentModule,
     CommentModule,
     SearchModule,
+    ActivityModule,
   ],
   controllers: [AppController],
   providers: [

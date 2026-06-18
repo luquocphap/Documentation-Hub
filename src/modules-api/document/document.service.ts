@@ -30,6 +30,11 @@ import { sendDocumentInvitationEmail } from 'src/common/email/send-document-invi
 import { ChangeDocumentRoleDto } from './dto/change-document-role.dto';
 import { WorkspaceRole } from '../workspace/schemas/workspace-roles.schema';
 import { DocumentContentExtractorService } from 'src/modules-system/document-parser/document-content-extractor.service';
+import {
+  ACTIVITY_LOG_EVENT,
+  ActivityLogAction,
+  type ActivityLogPayload,
+} from 'src/common/events/activity-log.event';
 
 const DOCUMENT_CONTENT_EVENTS = {
   EXTRACT_PDF: 'document.content.extract.pdf',
@@ -75,6 +80,14 @@ export class DocumentService {
       .emitAsync(eventName, payload)
       .catch((error) =>
         console.error(`[DocumentContent] Event failed: ${eventName}`, error),
+      );
+  }
+
+  private emitActivityLogEvent(payload: ActivityLogPayload) {
+    void this.eventEmitter
+      .emitAsync(ACTIVITY_LOG_EVENT, payload)
+      .catch((error) =>
+        console.error('[ActivityLog] Document event failed', error),
       );
   }
 
@@ -188,6 +201,14 @@ export class DocumentService {
       ownerId: user._id.toString(),
     });
 
+    this.emitActivityLogEvent({
+      action: ActivityLogAction.CREATE_DOCUMENT,
+      actorId: user._id.toString(),
+      workspaceId: workspaceId.toString(),
+      documentId: newDocument._id.toString(),
+      documentName: newDocument.title,
+    });
+
     return newDocument;
   }
 
@@ -230,28 +251,37 @@ export class DocumentService {
       });
 
       if (document) {
-        // (Tùy chọn) Xóa file cũ trên Cloudinary để tránh rác nếu là hành động ghi đè
-        if (document.public_id) {
+        const isUpdatingExistingFile = Boolean(document.public_id?.trim());
+
+        // existing file -> update
+        if (isUpdatingExistingFile) {
           await this.cloudinaryService
             .deleteFile(document.public_id)
-            .catch((e) => console.error('Lỗi xóa file cũ:', e));
+            .catch((error) => console.error('Lỗi xóa file cũ:', error));
         }
 
-        // Cập nhật record với public_id mới và người cập nhật
         document.public_id = public_id;
         document.updatedAt = new Date();
         document.updatedBy = new Types.ObjectId(userId);
         await document.save();
 
+        // log update activity
+        if (isUpdatingExistingFile) {
+          this.emitActivityLogEvent({
+            action: ActivityLogAction.UPDATE_DOCUMENT,
+            actorId: userId,
+            workspaceId: document.workspaceId.toString(),
+            documentId,
+            documentName: document.title,
+          });
+        }
+
+        // emit event to upsert content in db
         this.emitDocumentContentEvent(DOCUMENT_CONTENT_EVENTS.EXTRACT_PDF, {
           documentId,
           publicId: public_id,
           fileUrl: body.secure_url ?? body.url,
         });
-
-        console.log(
-          `[Webhook] Cập nhật thành công file cho document: ${documentId}`,
-        );
       }
     }
 
@@ -284,6 +314,14 @@ export class DocumentService {
     document.updatedBy = user._id as Types.ObjectId;
     await document.save();
 
+    this.emitActivityLogEvent({
+      action: ActivityLogAction.UPDATE_DOCUMENT,
+      actorId: user._id.toString(),
+      workspaceId: document.workspaceId.toString(),
+      documentId,
+      documentName: document.title,
+    });
+
     return document;
   }
 
@@ -303,6 +341,14 @@ export class DocumentService {
     if (!document) {
       throw new NotFoundException('Tài liệu không tồn tại');
     }
+
+    this.emitActivityLogEvent({
+      action: ActivityLogAction.DELETE_DOCUMENT,
+      actorId: user._id.toString(),
+      workspaceId: document.workspaceId.toString(),
+      documentId,
+      documentName: document.title,
+    });
 
     return { message: 'Xóa tài liệu thành công' };
   }
@@ -382,6 +428,14 @@ export class DocumentService {
     this.emitDocumentContentEvent(DOCUMENT_CONTENT_EVENTS.EXTRACT_MARKDOWN, {
       documentId: newDocument._id.toString(),
       markdownContent,
+    });
+
+    this.emitActivityLogEvent({
+      action: ActivityLogAction.CREATE_DOCUMENT,
+      actorId: user._id.toString(),
+      workspaceId: workspaceObjId.toString(),
+      documentId: newDocument._id.toString(),
+      documentName: newDocument.title,
     });
 
     return newDocument;
@@ -470,6 +524,16 @@ export class DocumentService {
         actionUrl: `${APP_URL}/document/${documentId}`, // Link vào tài liệu
       });
 
+      this.emitActivityLogEvent({
+        action: ActivityLogAction.SHARE_DOCUMENT,
+        actorId: inviter._id.toString(),
+        workspaceId: document.workspaceId.toString(),
+        documentId,
+        documentName: document.title,
+        email: emailLower,
+        targetUserId: userExist._id.toString(),
+      });
+
       return {
         message:
           'Đã thêm thành viên trực tiếp vào Tài liệu và gửi email thông báo',
@@ -504,6 +568,16 @@ export class DocumentService {
       inviterName: inviter.fullName,
       roleName: role.name,
       actionUrl: `${APP_URL}/document/${documentId}`,
+    });
+
+    this.emitActivityLogEvent({
+      action: ActivityLogAction.SHARE_DOCUMENT,
+      actorId: inviter._id.toString(),
+      workspaceId: document.workspaceId.toString(),
+      documentId,
+      documentName: document.title,
+      email: emailLower,
+      targetUserId: userExist?._id.toString(),
     });
 
     return {
@@ -604,7 +678,11 @@ export class DocumentService {
     }));
   }
 
-  async removeExternalMember(documentId: string, userId: string) {
+  async removeExternalMember(
+    documentId: string,
+    userId: string,
+    currentUser: UserDocument,
+  ) {
     const document = await this.documentModel
       .findOne({
         _id: new Types.ObjectId(documentId),
@@ -636,11 +714,27 @@ export class DocumentService {
       );
     }
 
+    const targetUser = await this.userModel
+      .findById(userId)
+      .select('email')
+      .lean()
+      .exec();
+
     await this.documentMemberModel
       .findByIdAndUpdate(targetMember._id, {
         $set: { isDeleted: true },
       })
       .exec();
+
+    this.emitActivityLogEvent({
+      action: ActivityLogAction.REVOKE_ACCESS,
+      actorId: currentUser._id.toString(),
+      workspaceId: document.workspaceId.toString(),
+      documentId,
+      documentName: document.title,
+      email: (targetUser as any)?.email ?? userId,
+      targetUserId: userId,
+    });
 
     return { message: 'Đã xóa external member khỏi tài liệu thành công' };
   }
@@ -680,6 +774,8 @@ export class DocumentService {
     };
   }
 
+
+  // extract pdf content -> db
   @OnEvent(DOCUMENT_CONTENT_EVENTS.EXTRACT_PDF, { async: true })
   async handleExtractPdfContent(payload: ExtractPdfContentPayload) {
     try {

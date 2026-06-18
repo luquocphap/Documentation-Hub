@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { ActivityLogAction } from 'src/common/events/activity-log.event';
 import { ActionCategory } from 'src/modules-api/activity/schemas/action_categories.schema';
 import { Action } from 'src/modules-api/activity/schemas/actions.schema';
 
@@ -51,51 +52,61 @@ export class ActivityActionSeeder {
     const actions = [
       {
         _id: ACTION_IDS.CREATE_DOCUMENT,
+        code: ActivityLogAction.CREATE_DOCUMENT,
         action: 'Create document',
         categoryId: ACTION_CATEGORY_IDS.DOCUMENT,
       },
       {
         _id: ACTION_IDS.UPDATE_DOCUMENT,
+        code: ActivityLogAction.UPDATE_DOCUMENT,
         action: 'Update document',
         categoryId: ACTION_CATEGORY_IDS.DOCUMENT,
       },
       {
         _id: ACTION_IDS.DELETE_DOCUMENT,
+        code: ActivityLogAction.DELETE_DOCUMENT,
         action: 'Delete document',
         categoryId: ACTION_CATEGORY_IDS.DOCUMENT,
       },
       {
         _id: ACTION_IDS.SHARE_DOCUMENT,
+        code: ActivityLogAction.SHARE_DOCUMENT,
         action: 'Share document',
         categoryId: ACTION_CATEGORY_IDS.ACCESS_SHARING,
       },
       {
         _id: ACTION_IDS.REVOKE_ACCESS,
+        code: ActivityLogAction.REVOKE_ACCESS,
         action: 'Revoke access',
         categoryId: ACTION_CATEGORY_IDS.ACCESS_SHARING,
       },
       {
         _id: ACTION_IDS.INVITE_USER,
+        code: ActivityLogAction.INVITE_USER,
         action: 'Invite user',
         categoryId: ACTION_CATEGORY_IDS.WORKSPACE_MEMBERS,
       },
       {
         _id: ACTION_IDS.REMOVE_USER,
+        code: ActivityLogAction.REMOVE_USER,
         action: 'Remove user',
         categoryId: ACTION_CATEGORY_IDS.WORKSPACE_MEMBERS,
       },
       {
         _id: ACTION_IDS.CHANGE_USER_ROLE,
+        code: ActivityLogAction.CHANGE_USER_ROLE,
         action: 'Change user role',
         categoryId: ACTION_CATEGORY_IDS.WORKSPACE_MEMBERS,
       },
       {
         _id: ACTION_IDS.UPDATE_SETTINGS,
+        code: ActivityLogAction.UPDATE_SETTINGS,
         action: 'Update settings',
         categoryId: ACTION_CATEGORY_IDS.WORKSPACE_MEMBERS,
       },
       {
         _id: ACTION_IDS.WORKSPACE_CREATION,
+        code: ActivityLogAction.WORKSPACE_CREATION,
         action: 'Workspace creation',
         categoryId: ACTION_CATEGORY_IDS.WORKSPACE_MEMBERS,
       },
