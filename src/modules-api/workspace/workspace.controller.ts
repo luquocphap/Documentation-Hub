@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { WorkspaceService } from './workspace.service';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { UpdateWorkspaceDto } from './dto/update-workspace.dto';
@@ -19,7 +28,10 @@ export class WorkspaceController {
   }
 
   @Post()
-  create(@Body() createWorkspaceDto: CreateWorkspaceDto, @CurrentUser() user: UserDocument) {
+  create(
+    @Body() createWorkspaceDto: CreateWorkspaceDto,
+    @CurrentUser() user: UserDocument,
+  ) {
     return this.workspaceService.create(createWorkspaceDto, user);
   }
 
@@ -39,7 +51,7 @@ export class WorkspaceController {
   async removeMember(
     @Param('workspaceId') workspaceId: string,
     @Param('userId') userId: string,
-    @CurrentUser() user: UserDocument
+    @CurrentUser() user: UserDocument,
   ) {
     return this.workspaceService.removeMember(workspaceId, userId, user);
   }
@@ -49,37 +61,51 @@ export class WorkspaceController {
   async changeMemberRole(
     @Param('workspaceId') workspaceId: string,
     @Body() changeRoleDto: ChangeRoleDto,
+    @CurrentUser() user: UserDocument,
   ) {
-    return this.workspaceService.changeMemberRole(workspaceId, changeRoleDto);
+    return this.workspaceService.changeMemberRole(
+      workspaceId,
+      changeRoleDto,
+      user,
+    );
   }
-
-  
 
   @Get(':workspaceId')
   @Permissions('VIEW', 'WORKSPACE')
-  findOne(@Param('workspaceId', ParseMongoIdPipe) workspaceId: string, @CurrentUser() user: UserDocument) {
+  findOne(
+    @Param('workspaceId', ParseMongoIdPipe) workspaceId: string,
+    @CurrentUser() user: UserDocument,
+  ) {
     return this.workspaceService.findOne(workspaceId, user);
   }
 
   @Patch(':workspaceId')
-  @Permissions("EDIT", "WORKSPACE")
-  update(@Param('workspaceId') id: string, @Body() updateWorkspaceDto: UpdateWorkspaceDto) {
-    return this.workspaceService.update(id, updateWorkspaceDto);
+  @Permissions('EDIT', 'WORKSPACE')
+  update(
+    @Param('workspaceId') id: string,
+    @Body() updateWorkspaceDto: UpdateWorkspaceDto,
+    @CurrentUser() user: UserDocument,
+  ) {
+    return this.workspaceService.update(id, updateWorkspaceDto, user);
   }
 
   @Delete(':workspaceId')
-  @Permissions("DELETE", "WORKSPACE")
+  @Permissions('DELETE', 'WORKSPACE')
   remove(@Param('workspaceId') id: string, @CurrentUser() user: UserDocument) {
-    return this.workspaceService.remove(id, user); 
+    return this.workspaceService.remove(id, user);
   }
 
   @Post(':workspaceId/invite')
-  @Permissions("INVITE", "MEMBER")
+  @Permissions('INVITE', 'MEMBER')
   inviteMember(
     @Param('workspaceId') workspaceId: string,
     @Body() inviteMemberDto: InviteMemberDto,
-    @CurrentUser() user: UserDocument
+    @CurrentUser() user: UserDocument,
   ) {
-    return this.workspaceService.inviteMember(workspaceId, inviteMemberDto, user);
+    return this.workspaceService.inviteMember(
+      workspaceId,
+      inviteMemberDto,
+      user,
+    );
   }
 }

@@ -1,7 +1,17 @@
-import { 
-  Controller, Get, Post, Body, Patch, Param, Delete, 
-  Query, UseInterceptors, UploadedFile, ParseFilePipe, 
-  MaxFileSizeValidator, FileTypeValidator 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
 } from '@nestjs/common';
 import { DocumentService } from './document.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
@@ -23,23 +33,20 @@ export class DocumentController {
   constructor(private readonly documentService: DocumentService) {}
 
   @Get('/roles')
-  getRoles(){
+  getRoles() {
     return this.documentService.getRoles();
   }
 
-
   @Get()
-  @Permissions("VIEW", "WORKSPACE")
-  findAll(
-    @Query('workspaceId', ParseMongoIdPipe) workspaceId: string,
-  ) {
+  @Permissions('VIEW', 'WORKSPACE')
+  findAll(@Query('workspaceId', ParseMongoIdPipe) workspaceId: string) {
     return this.documentService.findAll(workspaceId);
   }
 
   @Post('from-markdown')
   createFromMarkdown(
     @Body() dto: CreateDocumentMarkdownDto,
-    @CurrentUser() user: UserDocument
+    @CurrentUser() user: UserDocument,
   ) {
     return this.documentService.createFromMarkdown(dto, user);
   }
@@ -47,7 +54,7 @@ export class DocumentController {
   @Post()
   create(
     @Body() createDocumentDto: CreateDocumentDto,
-    @CurrentUser() user: UserDocument
+    @CurrentUser() user: UserDocument,
   ) {
     return this.documentService.create(createDocumentDto, user);
   }
@@ -59,10 +66,10 @@ export class DocumentController {
   }
 
   @Get(':documentId/upload-signature')
-  @Permissions("EDIT", "DOCUMENT")
+  @Permissions('EDIT', 'DOCUMENT')
   getUploadSignature(
     @Param('documentId', ParseMongoIdPipe) documentId: string,
-    @CurrentUser() user: UserDocument
+    @CurrentUser() user: UserDocument,
   ) {
     return this.documentService.getUploadSignature(documentId, user);
   }
@@ -70,17 +77,17 @@ export class DocumentController {
   @Get(':documentId/my-role')
   getMyRole(
     @Param('documentId', ParseMongoIdPipe) documentId: string,
-    @CurrentUser() user: UserDocument
+    @CurrentUser() user: UserDocument,
   ) {
     return this.documentService.getMyRole(documentId, user);
   }
 
   @Post(':documentId/invite')
-  @Permissions("MANAGE_ACCESS", "DOCUMENT")
+  @Permissions('MANAGE_ACCESS', 'DOCUMENT')
   inviteMember(
     @Param('documentId', ParseMongoIdPipe) documentId: string,
     @Body() dto: InviteDocumentMemberDto,
-    @CurrentUser() user: UserDocument
+    @CurrentUser() user: UserDocument,
   ) {
     return this.documentService.inviteMember(documentId, dto, user);
   }
@@ -98,8 +105,9 @@ export class DocumentController {
   async removeExternalMember(
     @Param('documentId', ParseMongoIdPipe) documentId: string,
     @Param('userId', ParseMongoIdPipe) userId: string,
+    @CurrentUser() user: UserDocument,
   ) {
-    return this.documentService.removeExternalMember(documentId, userId);
+    return this.documentService.removeExternalMember(documentId, userId, user);
   }
 
   @Patch(':documentId/change-role')
@@ -112,28 +120,26 @@ export class DocumentController {
   }
 
   @Get(':documentId')
-  @Permissions("VIEW", "DOCUMENT")
-  findOne(
-    @Param('documentId', ParseMongoIdPipe) documentId: string
-  ) {
+  @Permissions('VIEW', 'DOCUMENT')
+  findOne(@Param('documentId', ParseMongoIdPipe) documentId: string) {
     return this.documentService.findOne(documentId);
   }
 
   @Patch(':documentId')
-  @Permissions("EDIT", "DOCUMENT")
+  @Permissions('EDIT', 'DOCUMENT')
   update(
-    @Param('documentId', ParseMongoIdPipe) documentId: string, 
+    @Param('documentId', ParseMongoIdPipe) documentId: string,
     @Body() updateDocumentDto: UpdateDocumentDto,
-    @CurrentUser() user: UserDocument
+    @CurrentUser() user: UserDocument,
   ) {
     return this.documentService.update(documentId, updateDocumentDto, user);
   }
 
   @Delete(':documentId')
-  @Permissions("DELETE", "DOCUMENT")
+  @Permissions('DELETE', 'DOCUMENT')
   remove(
     @Param('documentId', ParseMongoIdPipe) documentId: string,
-    @CurrentUser() user: UserDocument
+    @CurrentUser() user: UserDocument,
   ) {
     return this.documentService.remove(documentId, user);
   }
