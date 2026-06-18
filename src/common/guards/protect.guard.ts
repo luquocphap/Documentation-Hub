@@ -17,6 +17,11 @@ export class ProtectGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Passby Websocket
+    if (context.getType() !== 'http') {
+      return true;
+    }
+
     try {
       const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
         context.getHandler(),

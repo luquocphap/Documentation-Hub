@@ -6,6 +6,10 @@ import { tap } from 'rxjs/operators';
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    // Passby Socket
+    if (context.getType() !== 'http') {
+      return next.handle();
+    }
     const req = context.switchToHttp().getRequest();
     const method = req.method;
     const uri = req.originalUrl;

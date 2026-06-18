@@ -10,6 +10,11 @@ export interface Response<T> {
 @Injectable()
 export class ResponseSuccessInterceptor<T> implements NestInterceptor<T, Response<T>> {
     intercept(context: ExecutionContext, next: CallHandler): Observable<Response<T>> {
+        // Passby Websocket
+        if (context.getType() !== 'http') {
+            return next.handle();
+        }
+
         const res = context.switchToHttp().getResponse();
 
         return next

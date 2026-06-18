@@ -18,6 +18,8 @@ import {
   ActivityTarget,
   ActivityTargetType,
 } from './schemas/activities.schema';
+import { SocketGateway } from 'src/modules-system/socket/socket.gateway';
+import { ActivityLogItem } from './types/activity.types';
 
 type ActivityActor = {
   _id: Types.ObjectId;
@@ -57,7 +59,62 @@ export class ActivityService {
     private readonly actionModel: Model<Action>,
     @InjectModel(ActionCategory.name)
     private readonly actionCategoryModel: Model<ActionCategory>,
+
+    private readonly socketGateway: SocketGateway,
   ) {}
+
+  private mapActivity(activity: PopulatedActivity): ActivityLogItem {
+    const actor =
+      activity.actorId instanceof Types.ObjectId
+        ? undefined
+        : activity.actorId;
+
+    const workspace =
+      activity.workspaceId instanceof Types.ObjectId
+        ? undefined
+        : activity.workspaceId;
+
+    const action =
+      activity.actionId instanceof Types.ObjectId
+        ? undefined
+        : activity.actionId;
+
+    if (!action?.code) {
+      throw new Error(`Activity ${activity._id.toString()} has no action code`);
+    }
+
+    const actorId = actor?._id ?? activity.actorId;
+    const workspaceId = workspace?._id ?? activity.workspaceId;
+    const actionId = action._id;
+
+    if (!actorId || !workspaceId || !actionId || !activity.created_at) {
+      throw new Error(`Activity ${activity._id.toString()} is incomplete`);
+    }
+
+    return {
+      id: activity._id.toString(),
+
+      actorId: actorId.toString(),
+      actorName: actor?.fullName ?? 'Unknown',
+      actorEmail: actor?.email,
+
+      workspaceId: workspaceId.toString(),
+      workspaceName: workspace?.name,
+
+      actionId: actionId.toString(),
+      actionCode: action.code,
+      actionName: action.action,
+      actionCategoryId: action.categoryId?.toString(),
+
+      targets: (activity.targets ?? []).map((target) => ({
+        type: target.type,
+        value: target.value,
+        entityId: target.entityId?.toString() ?? null,
+      })),
+
+      createdAt: activity.created_at.toISOString(),
+    };
+  }
 
   async getActivityActors(workspaceId: string) {
     const actorIds = await this.activityModel
@@ -141,57 +198,59 @@ export class ActivityService {
     const activities = activityDocuments as unknown as PopulatedActivity[];
 
     return {
-      items: activities.map((activity) => {
-        const actor =
-          activity.actorId instanceof Types.ObjectId
-            ? undefined
-            : activity.actorId;
-        const workspace =
-          activity.workspaceId instanceof Types.ObjectId
-            ? undefined
-            : activity.workspaceId;
-        const action =
-          activity.actionId instanceof Types.ObjectId
-            ? undefined
-            : activity.actionId;
-
-        return {
-          id: activity._id,
-          actorId: actor?._id ?? activity.actorId,
-          actorName: actor?.fullName ?? 'Unknown',
-          actorEmail: actor?.email,
-          workspaceId: workspace?._id ?? activity.workspaceId,
-          workspaceName: workspace?.name,
-          actionId: action?._id ?? activity.actionId,
-          actionCode: action?.code,
-          actionName: action?.action,
-          actionCategoryId: action?.categoryId,
-          targets: (activity.targets ?? []).map((target) => ({
-            type: target.type,
-            value: target.value,
-            entityId: target.entityId?.toString() ?? null,
-          })),
-          createdAt: activity.created_at,
-        };
-      }),
+      items: activities.map((activity) => this.mapActivity(activity)),
       pagination: this.buildPagination(page, pageSize, total),
     };
   }
 
   @OnEvent(ACTIVITY_LOG_EVENT, { async: true })
   async handleActivityLog(payload: ActivityLogPayload) {
+    let createdActivityId: Types.ObjectId;
+
     try {
       const actionId = this.getActionId(payload.action);
       const targets = this.buildTargets(payload);
 
-      await this.activityModel.create({
+      const createdActivity = await this.activityModel.create({
         actorId: new Types.ObjectId(payload.actorId),
         workspaceId: new Types.ObjectId(payload.workspaceId),
         actionId,
         targets,
       });
+
+      createdActivityId = createdActivity._id;
     } catch (error) {
       console.error('[ActivityLog] Failed to write activity log', error);
+      return;
+    }
+
+    try {
+      const activity = await this.activityModel
+        .findById(createdActivityId)
+        .populate('actorId', 'fullName email')
+        .populate('workspaceId', 'name')
+        .populate('actionId', 'code action categoryId')
+        .lean()
+        .exec();
+
+      if (!activity) {
+        return;
+      }
+
+      const item = this.mapActivity(
+        activity as unknown as PopulatedActivity,
+      );
+
+      this.socketGateway.emitActivityCreated(
+        payload.workspaceId,
+        item,
+      );
+    } catch (error) {
+      // Activity đã được ghi DB thành công, lỗi socket không được xem là lỗi persistence.
+      console.error(
+        '[ActivityLog] Failed to emit realtime activity',
+        error,
+      );
     }
   }
 
