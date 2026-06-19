@@ -1,11 +1,15 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
     isEmail,
     IsNotEmpty,
+    IsOptional,
+    IsString,
     Length,
+    Matches,
     registerDecorator,
     ValidationOptions,
 } from "class-validator";
+import { WORKSPACE_REDIRECT_PATTERN } from "../utils/workspace-redirect.util";
 
 function IsEmailWhenNotEmpty(validationOptions?: ValidationOptions) {
     return function (object: object, propertyName: string) {
@@ -46,4 +50,12 @@ export class RegisterBody {
     @IsNotEmpty({message: "Mandatory field"})
     @ApiProperty({ example: "Lu Quoc Phap"})
     fullName!: string;
+
+    @IsOptional()
+    @IsString()
+    @Matches(WORKSPACE_REDIRECT_PATTERN, {
+        message: "redirectTo must be an internal workspace path",
+    })
+    @ApiPropertyOptional({ example: "%2Fworkspaces%2F000000000000000000000001" })
+    redirectTo?: string;
 }

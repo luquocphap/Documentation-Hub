@@ -8,12 +8,20 @@ export interface SendVerifyEmailParams {
   to: string;
   fullName: string;
   token: string;
+  redirectTo?: string;
 }
 
-export async function sendVerifyEmail(params: SendVerifyEmailParams): Promise<void> {
-  const { to, fullName, token } = params;
+export async function sendVerifyEmail(
+  params: SendVerifyEmailParams,
+): Promise<void> {
+  const { to, fullName, token, redirectTo } = params;
 
-  const verifyUrl = `${APP_URL}/auth/verify-email?token=${token}`;
+  const query = new URLSearchParams({ token });
+  if (redirectTo) {
+    query.set('redirectTo', redirectTo);
+  }
+
+  const verifyUrl = `${APP_URL}/auth/verify-email?${query.toString()}`;
 
   const { error } = await resend.emails.send({
     from: `Folio <${RESEND_FROM_EMAIL}>`,

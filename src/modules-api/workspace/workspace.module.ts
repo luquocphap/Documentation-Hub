@@ -22,5 +22,6 @@ import { DocumentModel, DocumentSchema } from '../document/schemas/documents.sch
   ],
   controllers: [WorkspaceController],
   providers: [WorkspaceService],
+  exports: [WorkspaceService],
 })
 export class WorkspaceModule {}
