@@ -12,6 +12,14 @@ import {
 import { TokenModule } from '../token/token.module';
 import { SocketAuthService } from './socket-auth.service';
 import { SocketGateway } from './socket.gateway';
+import {
+  DocumentMember,
+  DocumentMemberSchema,
+} from 'src/modules-api/document/schemas/document-members.schema';
+import {
+  DocumentRole,
+  DocumentRoleSchema,
+} from 'src/modules-api/document/schemas/document-roles.schema';
 
 @Module({
   imports: [
@@ -28,6 +36,14 @@ import { SocketGateway } from './socket.gateway';
       {
         name: WorkspaceRole.name,
         schema: WorkspaceRoleSchema,
+      },
+      {
+        name: DocumentMember.name,
+        schema: DocumentMemberSchema,
+      },
+      {
+        name: DocumentRole.name,
+        schema: DocumentRoleSchema,
       },
     ]),
   ],
