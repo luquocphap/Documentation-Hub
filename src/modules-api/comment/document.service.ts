@@ -15,6 +15,50 @@ import {
   CreateCommentReplyDto,
   UpdateCommentReplyDto,
 } from './dto/comment-reply.dto';
+import { SocketGateway } from 'src/modules-system/socket/socket.gateway';
+import {
+  DocumentCommentRealtimePayload,
+  RealtimeDocumentAnnotation,
+} from './types/comment-realtime.types';
+import { DocumentCommentStatus } from './schemas/document-comments.schema';
+
+type PopulatedCommentOwner = {
+  _id: Types.ObjectId;
+  fullName: string;
+};
+
+type PopulatedDocumentAnnotation = {
+  _id: Types.ObjectId;
+  documentId: Types.ObjectId;
+  annotationId: string;
+  type: string;
+  pageNumber: number;
+  quads: Record<string, unknown>[];
+  rect: Record<string, unknown> | null;
+  contents: string;
+  color: string;
+  opacity: number;
+  xfdf: string | null;
+  owner: Types.ObjectId;
+  created_at: Date;
+  updated_at: Date;
+};
+
+type PopulatedDocumentComment = {
+  _id: Types.ObjectId;
+  documentId: Types.ObjectId;
+  text: string;
+  selectedText: string | null;
+  pageNumber: number;
+  status: DocumentCommentStatus;
+  replyCount: number;
+  annotationRef: Types.ObjectId | PopulatedDocumentAnnotation | null;
+  annotationId: string | null;
+  owner: Types.ObjectId | PopulatedCommentOwner;
+  created_at: Date;
+  updated_at: Date;
+  isUpdated: boolean;
+};
 
 @Injectable()
 export class CommentService {
@@ -25,7 +69,95 @@ export class CommentService {
     private annotationModel: Model<DocumentAnnotation>,
     @InjectModel(CommentReply.name)
     private replyModel: Model<CommentReply>,
+    private readonly socketGateway: SocketGateway,
   ) {}
+
+  private emitRealtime(eventName: string, emit: () => void) {
+    try {
+      emit();
+    } catch (error) {
+      console.error(`[CommentRealtime] Failed to emit ${eventName}`, error);
+    }
+  }
+
+  private mapAnnotation(
+    annotation: PopulatedDocumentComment['annotationRef'],
+  ): RealtimeDocumentAnnotation | string | null {
+    if (!annotation) {
+      return null;
+    }
+
+    if (annotation instanceof Types.ObjectId) {
+      return annotation.toString();
+    }
+
+    return {
+      _id: annotation._id.toString(),
+      documentId: annotation.documentId.toString(),
+      annotationId: annotation.annotationId,
+      type: annotation.type,
+      pageNumber: annotation.pageNumber,
+      quads: annotation.quads,
+      rect: annotation.rect,
+      contents: annotation.contents,
+      color: annotation.color,
+      opacity: annotation.opacity,
+      xfdf: annotation.xfdf,
+      owner: annotation.owner.toString(),
+      created_at: annotation.created_at.toISOString(),
+      updated_at: annotation.updated_at.toISOString(),
+    };
+  }
+
+  private mapComment(
+    comment: PopulatedDocumentComment,
+  ): DocumentCommentRealtimePayload {
+    const owner =
+      comment.owner instanceof Types.ObjectId ? undefined : comment.owner;
+    const ownerId =
+      comment.owner instanceof Types.ObjectId
+        ? comment.owner.toString()
+        : comment.owner._id.toString();
+
+    return {
+      _id: comment._id.toString(),
+      documentId: comment.documentId.toString(),
+      text: comment.text,
+      selectedText: comment.selectedText,
+      pageNumber: comment.pageNumber,
+      status: comment.status,
+      replyCount: comment.replyCount,
+      annotationRef: this.mapAnnotation(comment.annotationRef),
+      annotationId: comment.annotationId,
+      owner: {
+        id: ownerId,
+        fullName: owner?.fullName ?? 'Unknown',
+      },
+      created_at: comment.created_at.toISOString(),
+      updated_at: comment.updated_at.toISOString(),
+      isUpdated: comment.isUpdated,
+    };
+  }
+
+  private async getCommentPayload(
+    commentId: string | Types.ObjectId,
+  ): Promise<DocumentCommentRealtimePayload> {
+    const comment = await this.commentModel
+      .findOne({
+        _id: new Types.ObjectId(commentId.toString()),
+        isDeleted: false,
+      })
+      .populate('annotationRef')
+      .populate('owner', 'fullName')
+      .lean()
+      .exec();
+
+    if (!comment) {
+      throw new NotFoundException('Khong tim thay comment');
+    }
+
+    return this.mapComment(comment as unknown as PopulatedDocumentComment);
+  }
 
   private assertOwner(
     ownerId: Types.ObjectId | string | null | undefined,
@@ -85,8 +217,35 @@ export class CommentService {
     });
     const savedReply = await newReply.save();
 
-    await this.commentModel.findByIdAndUpdate(commentId, {
-      $inc: { replyCount: 1 },
+    const updatedComment = await this.commentModel
+      .findOneAndUpdate(
+        {
+          _id: comment._id,
+          isDeleted: false,
+        },
+        {
+          $inc: { replyCount: 1 },
+        },
+        {
+          returnDocument: 'after',
+        },
+      )
+      .select('documentId replyCount')
+      .lean()
+      .exec();
+
+    if (!updatedComment) {
+      throw new NotFoundException(
+        'Khong tim thay comment hoac comment da bi xoa',
+      );
+    }
+
+    this.emitRealtime('reply:created_summary', () => {
+      this.socketGateway.emitReplyCreatedSummary({
+        documentId: updatedComment.documentId.toString(),
+        commentId,
+        replyCount: updatedComment.replyCount,
+      });
     });
 
     return savedReply.populate('owner', 'fullName');
@@ -169,7 +328,13 @@ export class CommentService {
     });
 
     const savedComment = await newComment.save();
-    return savedComment.populate('owner', 'fullName');
+    const payload = await this.getCommentPayload(savedComment._id);
+
+    this.emitRealtime('comment:created', () => {
+      this.socketGateway.emitCommentCreated(documentId, payload);
+    });
+
+    return payload;
   }
 
   async update(
@@ -196,7 +361,16 @@ export class CommentService {
     comment.isUpdated = true;
 
     const savedComment = await comment.save();
-    return savedComment.populate('owner', 'fullName');
+    const payload = await this.getCommentPayload(savedComment._id);
+
+    this.emitRealtime('comment:updated', () => {
+      this.socketGateway.emitCommentUpdated(
+        comment.documentId.toString(),
+        payload,
+      );
+    });
+
+    return payload;
   }
 
   async remove(commentId: string, user: UserDocument) {
@@ -204,6 +378,17 @@ export class CommentService {
     this.assertOwner(comment.owner, user, 'comment');
 
     const now = new Date();
+    let annotationId = comment.annotationId;
+
+    if (!annotationId && comment.annotationRef) {
+      const annotation = await this.annotationModel
+        .findById(comment.annotationRef)
+        .select('annotationId')
+        .lean()
+        .exec();
+
+      annotationId = annotation?.annotationId ?? null;
+    }
 
     comment.isDeleted = true;
     comment.deletedAt = now;
@@ -222,6 +407,14 @@ export class CommentService {
       .catch((error) =>
         console.error('Failed to delete comment replies', error),
       );
+
+    this.emitRealtime('comment:deleted', () => {
+      this.socketGateway.emitCommentDeleted({
+        documentId: comment.documentId.toString(),
+        commentId,
+        annotationId,
+      });
+    });
 
     return { message: 'Xoa comment thanh cong', commentId };
   }
