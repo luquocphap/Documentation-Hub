@@ -8,8 +8,8 @@ import {
   DocumentAnnotation,
   DocumentAnnotationSchema,
 } from './schemas/document-annotations.schema';
-import { CommentService } from './document.service';
-import { CommentController } from './document.controller';
+import { CommentService } from './comment.service';
+import { CommentController } from './comment.controller';
 import {
   CommentReply,
   CommentReplySchema,

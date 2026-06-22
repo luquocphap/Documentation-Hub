@@ -17,7 +17,7 @@ import {
   UpdateCommentReplyDto,
 } from './dto/comment-reply.dto';
 import { UpdateDocumentCommentDto } from './dto/update-document-comment.dto';
-import { CommentService } from './document.service';
+import { CommentService } from './comment.service';
 
 @Controller('comment')
 export class CommentController {
