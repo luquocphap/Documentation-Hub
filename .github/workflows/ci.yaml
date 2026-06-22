@@ -1,0 +1,22 @@
+name: ci
+
+on:
+    push:
+        branches: ["main"]
+    
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Login Dockerhub
+              run: docker login -u luquocphap -p ${{secrets.PASS_DOCKER}}
+            
+            - name: Build Image
+              run: docker build -t luquocphap/doc-hub-backend:latest .
+            
+            - name: Push Image
+              run: docker push luquocphap/doc-hub-backend:latest
+
