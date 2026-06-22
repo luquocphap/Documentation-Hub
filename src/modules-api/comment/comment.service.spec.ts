@@ -16,7 +16,14 @@ jest.mock('src/modules-system/socket/socket.gateway', () => ({
   SocketGateway: class SocketGateway {},
 }));
 
-type MockModel = jest.Mock & Record<string, jest.Mock>;
+type MockModel = jest.Mock & {
+  find: jest.Mock;
+  findOne: jest.Mock;
+  findById: jest.Mock;
+  findByIdAndUpdate: jest.Mock;
+  findOneAndUpdate: jest.Mock;
+  deleteMany: jest.Mock;
+};
 
 function createQuery<T>(value: T) {
   const query: Record<string, jest.Mock> = {};

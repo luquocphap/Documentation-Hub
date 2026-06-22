@@ -28,7 +28,14 @@ jest.mock('src/common/email/send-workspace-invitation-email', () => ({
   sendWorkspaceInvitationEmail: jest.fn(),
 }));
 
-type MockModel = jest.Mock & Record<string, jest.Mock>;
+type MockModel = jest.Mock & {
+  find: jest.Mock;
+  findOne: jest.Mock;
+  findById: jest.Mock;
+  create: jest.Mock;
+  updateOne: jest.Mock;
+  updateMany: jest.Mock;
+};
 
 function createExecQuery<T>(value: T) {
   const query: Record<string, jest.Mock> = {};
