@@ -34,7 +34,7 @@ import {
 } from './modules-api/document/schemas/document-roles.schema';
 import { DocumentRoleSeeder } from './common/seeds/document-role.seed';
 import { PdfModule } from './modules-system/pdf/pdf.module';
-import { CommentModule } from './modules-api/comment/document.module';
+import { CommentModule } from './modules-api/comment/comment.module';
 import { SearchModule } from './modules-api/search/search.module';
 import {
   ActionCategory,
