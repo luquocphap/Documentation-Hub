@@ -24,6 +24,10 @@ jest.mock('src/common/email/send-verify-email', () => ({
   sendVerifyEmail: jest.fn(),
 }));
 
+jest.mock('src/common/email/send-workspace-invitation-email', () => ({
+  sendWorkspaceInvitationEmail: jest.fn(),
+}));
+
 type MockModel = jest.Mock & Record<string, jest.Mock>;
 
 function createExecQuery<T>(value: T) {
