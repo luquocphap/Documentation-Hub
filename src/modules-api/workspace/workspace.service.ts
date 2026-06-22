@@ -15,7 +15,7 @@ import {
   InvitationStatus,
   WorkspaceInvitation,
 } from 'src/modules-api/workspace/schemas/workspace-invitation.schema';
-import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { WorkspaceRole } from 'src/modules-api/workspace/schemas/workspace-roles.schema';
 import { APP_URL } from 'src/common/constants/app.constant';
 import { sendWorkspaceInvitationEmail } from 'src/common/email/send-workspace-invitation-email';
@@ -28,6 +28,13 @@ import {
   ActivityLogAction,
   type ActivityLogPayload,
 } from 'src/common/events/activity-log.event';
+
+export interface WorkspaceInvitationAcceptanceResult {
+  status: 'accepted' | 'expired' | 'processed' | 'unavailable';
+  redirectTo?: string;
+  memberAdded?: boolean;
+  workspaceId?: string;
+}
 
 @Injectable()
 export class WorkspaceService {
@@ -247,58 +254,231 @@ export class WorkspaceService {
     return { message: 'Xóa workspace thành công' };
   }
 
-  // Lắng nghe sự kiện 'user.email.verified'
-  @OnEvent('user.email.verified')
-  async handlePendingInvitationsAfterVerified(payload: {
+  async findPendingInvitationForRegistration(payload: {
     email: string;
-    userId: string;
+    workspaceId: string;
   }) {
-    const { email, userId } = payload;
-
-    // Tìm toàn bộ lời mời PENDING của email này
-    const pendingInvites = await this.invitationModel
-      .find({
-        email: email.toLowerCase(),
+    const invitation = await this.invitationModel
+      .findOne({
+        email: payload.email.toLowerCase(),
         status: InvitationStatus.PENDING,
         expiresAt: { $gt: new Date() },
+        $expr: {
+          // avoid type bug
+          $eq: [{ $toString: '$workspaceId' }, payload.workspaceId],
+        },
+      })
+      .select('_id workspaceId')
+      .lean()
+      .exec();
+
+    if (!invitation) {
+      return null;
+    }
+
+    return {
+      invitationId: invitation._id,
+      redirectTo: `/workspaces/${payload.workspaceId}`,
+    };
+  }
+
+  async acceptInvitationAfterEmailVerified(payload: {
+    invitationId: Types.ObjectId;
+    email: string;
+    userId: string;
+  }): Promise<WorkspaceInvitationAcceptanceResult> {
+    const invitation = await this.invitationModel
+      .findOne({
+        _id: payload.invitationId,
+        email: payload.email.toLowerCase(),
       })
       .exec();
 
-    if (pendingInvites.length === 0) return;
+    if (!invitation) {
+      return { status: 'unavailable' };
+    }
 
-    // Duyệt qua từng lời mời để add vào workspace_members
-    for (const invite of pendingInvites) {
-      const workspace = await this.workspaceModel.findById(invite.workspaceId);
-      const isMemberExist = await this.workspaceMemberModel.exists({
-        workspaceId: new Types.ObjectId(invite.workspaceId),
-        userId: new Types.ObjectId(userId),
-      });
-
-      if (!isMemberExist) {
-        // Thêm user vào workspace
-        await this.workspaceMemberModel.create({
-          workspaceId: new Types.ObjectId(invite.workspaceId),
-          workspaceName: workspace?.name,
-          workspaceDescription: workspace?.description,
-          userId: new Types.ObjectId(userId),
-          roleId: new Types.ObjectId(invite.roleId),
-          joinedAt: new Date(),
-        });
-
-        // Tăng memberCount
-        await this.workspaceModel.findByIdAndUpdate(invite.workspaceId, {
-          $inc: { memberCount: 1 },
-        });
-
-        this.eventEmitter.emit('workspace.member.added', {
-          workspaceId: invite.workspaceId.toString(),
-          userId: userId,
-        });
+    const now = new Date();
+    if (
+      invitation.status === InvitationStatus.EXPIRED ||
+      invitation.expiresAt <= now
+    ) {
+      if (invitation.status === InvitationStatus.PENDING) {
+        await this.invitationModel.updateOne(
+          { _id: invitation._id, status: InvitationStatus.PENDING },
+          { $set: { status: InvitationStatus.EXPIRED } },
+        );
       }
 
-      // Cập nhật trạng thái
-      invite.status = InvitationStatus.ACCEPTED;
-      await invite.save();
+      return { status: 'expired' };
+    }
+
+    const workspaceId = invitation.workspaceId.toString();
+    if (!Types.ObjectId.isValid(workspaceId)) {
+      return { status: 'unavailable' };
+    }
+
+    const workspaceObjectId = new Types.ObjectId(workspaceId);
+    const redirectTo = `/workspaces/${workspaceId}`;
+    const userId = new Types.ObjectId(payload.userId);
+    const workspace = await this.workspaceModel
+      .findOne({
+        _id: workspaceObjectId,
+        isDeleted: { $ne: true },
+      })
+      .exec();
+
+    if (!workspace) {
+      return { status: 'unavailable' };
+    }
+
+    if (invitation.status === InvitationStatus.ACCEPTED) {
+      const activeMember = await this.workspaceMemberModel.exists({
+        workspaceId: workspaceObjectId,
+        userId,
+        isDeleted: { $ne: true },
+      });
+
+      if (!activeMember) {
+        return { status: 'processed' };
+      }
+
+      await this.syncWorkspaceMemberCount(workspaceObjectId);
+      return {
+        status: 'accepted',
+        redirectTo,
+        memberAdded: false,
+        workspaceId,
+      };
+    }
+
+    const claimResult = await this.invitationModel.updateOne(
+      {
+        _id: invitation._id,
+        status: InvitationStatus.PENDING,
+        expiresAt: { $gt: now },
+      },
+      { $set: { status: InvitationStatus.ACCEPTED } },
+    );
+
+    if (claimResult.modifiedCount !== 1) {
+      return { status: 'processed' };
+    }
+
+    let memberAdded: boolean;
+
+    try {
+      memberAdded = await this.ensureInvitedWorkspaceMember({
+        workspaceId: workspaceObjectId,
+        userId,
+        roleId: invitation.roleId,
+        workspaceName: workspace.name,
+        workspaceDescription: workspace.description,
+      });
+    } catch (error) {
+      await this.invitationModel.updateOne(
+        {
+          _id: invitation._id,
+          status: InvitationStatus.ACCEPTED,
+        },
+        { $set: { status: InvitationStatus.PENDING } },
+      );
+      throw error;
+    }
+
+    const activeMember = await this.workspaceMemberModel.exists({
+      workspaceId: workspaceObjectId,
+      userId,
+      isDeleted: { $ne: true },
+    });
+
+    if (!activeMember) {
+      return { status: 'processed' };
+    }
+
+    await this.syncWorkspaceMemberCount(workspaceObjectId);
+    return {
+      status: 'accepted',
+      redirectTo,
+      memberAdded,
+      workspaceId,
+    };
+  }
+
+  private async syncWorkspaceMemberCount(
+    workspaceId: Types.ObjectId,
+  ): Promise<void> {
+    const memberCount = await this.workspaceMemberModel.countDocuments({
+      workspaceId,
+      isDeleted: { $ne: true },
+    });
+
+    await this.workspaceModel.updateOne(
+      { _id: workspaceId, isDeleted: { $ne: true } },
+      { $set: { memberCount } },
+    );
+  }
+
+  private async ensureInvitedWorkspaceMember(payload: {
+    workspaceId: Types.ObjectId;
+    userId: Types.ObjectId;
+    roleId: Types.ObjectId;
+    workspaceName: string;
+    workspaceDescription: string | null;
+  }): Promise<boolean> {
+    const activeMember = await this.workspaceMemberModel.exists({
+      workspaceId: payload.workspaceId,
+      userId: payload.userId,
+      isDeleted: { $ne: true },
+    });
+
+    if (activeMember) {
+      return false;
+    }
+
+    const restoredMember = await this.workspaceMemberModel
+      .findOneAndUpdate(
+        {
+          workspaceId: payload.workspaceId,
+          userId: payload.userId,
+          isDeleted: true,
+        },
+        {
+          $set: {
+            roleId: payload.roleId,
+            joinedAt: new Date(),
+            isDeleted: false,
+            deletedAt: null,
+            deletedBy: null,
+            workspaceName: payload.workspaceName,
+            workspaceDescription: payload.workspaceDescription,
+          },
+        },
+        { returnDocument: 'after' },
+      )
+      .exec();
+
+    if (restoredMember) {
+      return true;
+    }
+
+    try {
+      await this.workspaceMemberModel.create({
+        workspaceId: payload.workspaceId,
+        userId: payload.userId,
+        roleId: payload.roleId,
+        joinedAt: new Date(),
+        workspaceName: payload.workspaceName,
+        workspaceDescription: payload.workspaceDescription,
+      });
+
+      return true;
+    } catch (error) {
+      if ((error as { code?: number }).code === 11000) {
+        return false;
+      }
+
+      throw error;
     }
   }
 
@@ -406,9 +586,11 @@ export class WorkspaceService {
     // Kiểm tra xem có lời mời nào đang Pending mà chưa hết hạn không
     const pendingInvite = await this.invitationModel.exists({
       email: emailLower,
-      workspaceId,
       status: InvitationStatus.PENDING,
       expiresAt: { $gt: new Date() },
+      $expr: {
+        $eq: [{ $toString: '$workspaceId' }, workspaceId],
+      },
     });
 
     if (pendingInvite) {
@@ -420,8 +602,8 @@ export class WorkspaceService {
     // Tạo record trong WorkspaceInvitation
     await this.invitationModel.create({
       email: emailLower,
-      workspaceId,
-      roleId,
+      workspaceId: new Types.ObjectId(workspaceId),
+      roleId: new Types.ObjectId(roleId),
       inviterId: inviter._id,
     });
 
@@ -431,7 +613,7 @@ export class WorkspaceService {
       workspaceName: workspace.name,
       inviterName: inviter.fullName,
       roleName: role.name,
-      actionUrl: `${APP_URL}/register?email=${encodeURIComponent(emailLower)}`, // Chuyển hướng sang Sign Up
+      actionUrl: `${APP_URL}/workspaces/${workspaceId}`,
     });
 
     this.emitActivityLogEvent({

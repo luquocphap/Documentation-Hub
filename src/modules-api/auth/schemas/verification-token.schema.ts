@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { User } from './user.schema';
+import { WorkspaceInvitation } from '../../workspace/schemas/workspace-invitation.schema';
 
 export type VerificationTokenDocument = HydratedDocument<VerificationToken>;
 
@@ -16,6 +17,12 @@ export class VerificationToken {
   @Prop({ type: Types.ObjectId, ref: User.name, required: true, index: true })
   userId!: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: WorkspaceInvitation.name, default: null })
+  workspaceInvitationId?: Types.ObjectId | null;
+
+  @Prop({ type: String, default: null })
+  redirectTo?: string | null;
+
   @Prop({ required: true })
   expiresAt!: Date;
 
@@ -26,4 +33,5 @@ export class VerificationToken {
   isValid!: boolean;
 }
 
-export const VerificationTokenSchema = SchemaFactory.createForClass(VerificationToken);
+export const VerificationTokenSchema =
+  SchemaFactory.createForClass(VerificationToken);

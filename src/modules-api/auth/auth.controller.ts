@@ -9,10 +9,34 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 import { NODE_ENV } from 'src/common/constants/app.constant';
 import type { UserDocument } from './schemas/user.schema';
 import { SearchUserDto } from './dto/search-user.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  private setAuthCookies(
+    res: Response,
+    result: {
+      accessToken: string;
+      refreshToken: string;
+      refreshExpiresAt: Date;
+    },
+  ) {
+    const maxAge = Math.max(
+      1,
+      new Date(result.refreshExpiresAt).getTime() - Date.now(),
+    );
+    const options = {
+      httpOnly: true,
+      secure: NODE_ENV === "production",
+      sameSite: "strict" as const,
+      maxAge,
+    };
+
+    res.cookie("accessToken", result.accessToken, options);
+    res.cookie("refreshToken", result.refreshToken, options);
+  }
 
   @Post('register')
   @Public()
@@ -33,19 +57,14 @@ export class AuthController {
     res: Response
   ){
     const result = await this.authService.login(body);
-    res.cookie("accessToken", result.accessToken, {
-      httpOnly: true,
-      secure: NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
-    res.cookie("refreshToken", result.refreshToken, {
-      httpOnly: true,
-      secure: NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
+    this.setAuthCookies(res, result);
     return result;
+  }
+
+  @Post('resend-verification')
+  @Public()
+  async resendVerification(@Body() body: ResendVerificationDto) {
+    return this.authService.resendVerification(body);
   }
 
   @Get("user-info")
@@ -58,37 +77,18 @@ export class AuthController {
   @Public()
   async refreshToken(@Req() req: Request, @Res() res: Response) {
     const result = await this.authService.refreshToken(req);
-    res.cookie("accessToken", result.accessToken, {
-      httpOnly: true,
-      secure: NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
-    res.cookie("refreshToken", result.refreshToken, {
-      httpOnly: true,
-      secure: NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
+    this.setAuthCookies(res, result);
     res.json({result});
   }
 
   @Get('verify-email')
   @Public()
-  async verifyEmail(@Query() query: VerifyEmailDto, @Res() res: Response) {
+  async verifyEmail(
+    @Query() query: VerifyEmailDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = await this.authService.verifyEmail(query.token)
-    res.cookie("accessToken", result.accessToken, {
-      httpOnly: true,
-      secure: NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
-    res.cookie("refreshToken", result.refreshToken, {
-      httpOnly: true,
-      secure: NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
+    this.setAuthCookies(res, result);
     return result;
   }
 

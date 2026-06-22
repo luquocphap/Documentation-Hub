@@ -7,10 +7,12 @@ import { User, UserSchema } from './schemas/user.schema';
 import { VerificationToken, VerificationTokenSchema } from './schemas/verification-token.schema';
 import { WorkspaceMember, WorkspaceMemberSchema } from '../workspace/schemas/workspace_members.schema';
 import { DocumentMember, DocumentMemberSchema } from '../document/schemas/document-members.schema';
+import { WorkspaceModule } from '../workspace/workspace.module';
 
 @Module({
   imports: [
     TokenModule,
+    WorkspaceModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: VerificationToken.name, schema: VerificationTokenSchema },
