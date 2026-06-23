@@ -7,6 +7,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
+import { RedisService } from 'src/modules-system/redis/redis.service';
 import { sendWorkspaceInvitationEmail } from 'src/common/email/send-workspace-invitation-email';
 import {
   ACTIVITY_LOG_EVENT,
@@ -69,6 +70,13 @@ describe('WorkspaceService', () => {
     emit: jest.Mock;
     emitAsync: jest.Mock;
   };
+  let redisClient: {
+    get: jest.Mock;
+    set: jest.Mock;
+  };
+  let redisService: {
+    getClient: jest.Mock;
+  };
 
   const mockedSendWorkspaceInvitationEmail =
     sendWorkspaceInvitationEmail as jest.Mock;
@@ -102,6 +110,13 @@ describe('WorkspaceService', () => {
       emit: jest.fn(),
       emitAsync: jest.fn().mockResolvedValue(undefined),
     };
+    redisClient = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue('OK'),
+    };
+    redisService = {
+      getClient: jest.fn().mockReturnValue(redisClient),
+    };
     mockedSendWorkspaceInvitationEmail.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
@@ -134,6 +149,10 @@ describe('WorkspaceService', () => {
         {
           provide: EventEmitter2,
           useValue: eventEmitter,
+        },
+        {
+          provide: RedisService,
+          useValue: redisService,
         },
       ],
     }).compile();
@@ -1108,6 +1127,31 @@ describe('WorkspaceService', () => {
   });
 
   describe('getMembers', () => {
+    it('returns cached workspace members without querying MongoDB', async () => {
+      const workspaceId = new Types.ObjectId().toString();
+      const cachedMembers = [
+        {
+          userId: new Types.ObjectId().toString(),
+          fullName: 'Cached Member',
+          email: 'cached@example.com',
+          role: 'Member',
+          roleId: new Types.ObjectId().toString(),
+          joinedAt: new Date().toISOString(),
+        },
+      ];
+      redisClient.get.mockResolvedValue(JSON.stringify(cachedMembers));
+
+      await expect(service.getMembers(workspaceId)).resolves.toEqual(
+        cachedMembers,
+      );
+
+      expect(redisClient.get).toHaveBeenCalledWith(
+        `workspaceMember:${workspaceId}`,
+      );
+      expect(workspaceMemberModel.find).not.toHaveBeenCalled();
+      expect(redisClient.set).not.toHaveBeenCalled();
+    });
+
     it('maps populated workspace members', async () => {
       const workspaceId = new Types.ObjectId();
       const userId = new Types.ObjectId();
@@ -1144,6 +1188,24 @@ describe('WorkspaceService', () => {
 
       expect(query.populate).toHaveBeenCalledTimes(2);
       expect(query.sort).toHaveBeenCalledWith({ joinedAt: 1 });
+      expect(redisClient.get).toHaveBeenCalledWith(
+        `workspaceMember:${workspaceId.toString()}`,
+      );
+      expect(redisClient.set).toHaveBeenCalledWith(
+        `workspaceMember:${workspaceId.toString()}`,
+        JSON.stringify([
+          {
+            userId,
+            fullName: 'Member',
+            email: 'member@example.com',
+            role: 'Member',
+            roleId,
+            joinedAt,
+          },
+        ]),
+        'EX',
+        2,
+      );
     });
   });
 
