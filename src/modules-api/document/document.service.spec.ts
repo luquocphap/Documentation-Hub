@@ -14,6 +14,7 @@ import {
   ActivityLogAction,
 } from 'src/common/events/activity-log.event';
 import { DOCUMENT_ROLE_IDS } from 'src/common/seeds/document-role.seed';
+import { ROLE_IDS } from 'src/common/seeds/role.seed';
 import { CloudinaryService } from 'src/modules-system/cloudinary/cloudinary.service';
 import { DocumentContentExtractorService } from 'src/modules-system/document-parser/document-content-extractor.service';
 import { PdfService } from 'src/modules-system/pdf/pdf.service';
@@ -1406,15 +1407,20 @@ describe('DocumentService', () => {
   });
 
   describe('handleDocumentCreated', () => {
-    it('grants editor access to all workspace members except the owner', async () => {
+    it('grants owner access to workspace admins before editor access to other members', async () => {
       const documentId = new Types.ObjectId();
       const workspaceId = new Types.ObjectId();
       const ownerId = new Types.ObjectId();
+      const adminId = new Types.ObjectId();
       const memberId = new Types.ObjectId();
       let insertedMembers: Array<Record<string, unknown>> | undefined;
 
       workspaceMemberModel.find.mockReturnValue(
-        createQuery([{ userId: ownerId }, { userId: memberId }]),
+        createQuery([
+          { userId: ownerId, roleId: ROLE_IDS.ADMIN_WORKSPACE },
+          { userId: memberId, roleId: ROLE_IDS.MEMBER_WORKSPACE },
+          { userId: adminId, roleId: ROLE_IDS.ADMIN_WORKSPACE },
+        ]),
       );
       documentMemberModel.insertMany.mockImplementation((items: unknown) => {
         insertedMembers = items as Array<Record<string, unknown>>;
@@ -1427,8 +1433,15 @@ describe('DocumentService', () => {
         ownerId: ownerId.toString(),
       });
 
-      expect(insertedMembers).toHaveLength(1);
+      expect(insertedMembers).toHaveLength(2);
       expect(insertedMembers?.[0]).toEqual(
+        expect.objectContaining({
+          documentId,
+          userId: adminId,
+          roleId: DOCUMENT_ROLE_IDS.OWNER,
+        }),
+      );
+      expect(insertedMembers?.[1]).toEqual(
         expect.objectContaining({
           documentId,
           userId: memberId,
@@ -1440,7 +1453,9 @@ describe('DocumentService', () => {
     it('does not insert when the owner is the only workspace member', async () => {
       const ownerId = new Types.ObjectId();
       workspaceMemberModel.find.mockReturnValue(
-        createQuery([{ userId: ownerId }]),
+        createQuery([
+          { userId: ownerId, roleId: ROLE_IDS.ADMIN_WORKSPACE },
+        ]),
       );
 
       await service.handleDocumentCreated({
@@ -1457,7 +1472,12 @@ describe('DocumentService', () => {
         .spyOn(console, 'error')
         .mockImplementation(() => undefined);
       workspaceMemberModel.find.mockReturnValue(
-        createQuery([{ userId: new Types.ObjectId() }]),
+        createQuery([
+          {
+            userId: new Types.ObjectId(),
+            roleId: ROLE_IDS.MEMBER_WORKSPACE,
+          },
+        ]),
       );
       documentMemberModel.insertMany.mockRejectedValue(
         new Error('duplicate key'),
