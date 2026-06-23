@@ -36,6 +36,7 @@ import {
   type ActivityLogPayload,
 } from 'src/common/events/activity-log.event';
 import { RedisService } from 'src/modules-system/redis/redis.service';
+import { ROLE_IDS } from 'src/common/seeds/role.seed';
 
 const DOCUMENT_CONTENT_EVENTS = {
   EXTRACT_PDF: 'document.content.extract.pdf',
@@ -847,14 +848,35 @@ export class DocumentService {
       .exec();
 
     // Lọc ra các thành viên không phải là người tạo
-    const docsToInsert = members
-      .filter((m) => m.userId.toString() !== ownerId)
+    const membersExceptOwner = members.filter(
+      (member) => member.userId.toString() !== ownerId,
+    );
+
+    const adminDocuments = membersExceptOwner
+      .filter(
+        (member) =>
+          member.roleId.toString() === ROLE_IDS.ADMIN_WORKSPACE.toString(),
+      )
+      .map((m) => ({
+        documentId: new Types.ObjectId(documentId),
+        userId: m.userId,
+        roleId: DOCUMENT_ROLE_IDS.OWNER,
+        joinedAt: new Date(),
+      }));
+
+    const editorDocuments = membersExceptOwner
+      .filter(
+        (member) =>
+          member.roleId.toString() !== ROLE_IDS.ADMIN_WORKSPACE.toString(),
+      )
       .map((m) => ({
         documentId: new Types.ObjectId(documentId),
         userId: m.userId,
         roleId: DOCUMENT_ROLE_IDS.EDITOR,
         joinedAt: new Date(),
       }));
+
+    const docsToInsert = [...adminDocuments, ...editorDocuments];
 
     if (docsToInsert.length > 0) {
       await this.documentMemberModel
