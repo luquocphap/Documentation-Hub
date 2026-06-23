@@ -51,3 +51,4 @@ export const DocumentSchema = SchemaFactory.createForClass(DocumentModel);
 
 // Lấy danh sách Document của 1 Workspace (bỏ qua những cái đã xóa) theo thứ tự mới nhất
 DocumentSchema.index({ workspaceId: 1, isDeleted: 1, created_at: -1 });
+DocumentSchema.index({ isDeleted: 1, deletedAt: 1 });
