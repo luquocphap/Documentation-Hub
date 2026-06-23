@@ -28,6 +28,7 @@ import {
   ActivityLogAction,
   type ActivityLogPayload,
 } from 'src/common/events/activity-log.event';
+import { RedisService } from 'src/modules-system/redis/redis.service';
 
 export interface WorkspaceInvitationAcceptanceResult {
   status: 'accepted' | 'expired' | 'processed' | 'unavailable';
@@ -51,6 +52,7 @@ export class WorkspaceService {
     @InjectModel(DocumentModel.name)
     private readonly documentModel: Model<DocumentModel>,
     private eventEmitter: EventEmitter2,
+    private readonly redisService: RedisService,
   ) {}
 
   private emitActivityLogEvent(payload: ActivityLogPayload) {
@@ -640,6 +642,11 @@ export class WorkspaceService {
   }
 
   async getMembers(workspaceId: string) {
+    const cachedWorkspaceMember = await this.redisService.getClient().get(`workspaceMember:${workspaceId}`);
+    if (cachedWorkspaceMember) {
+      return JSON.parse(cachedWorkspaceMember);
+    }
+
     const members = await this.workspaceMemberModel
       .find({
         workspaceId: new Types.ObjectId(workspaceId),
@@ -650,7 +657,8 @@ export class WorkspaceService {
       .sort({ joinedAt: 1 })
       .exec();
 
-    return members.map((m: any) => ({
+    
+    const workspaceMembers = members.map((m: any) => ({
       userId: m.userId._id,
       fullName: m.userId?.fullName,
       email: m.userId?.email,
@@ -658,6 +666,15 @@ export class WorkspaceService {
       roleId: m.roleId?._id,
       joinedAt: m.joinedAt,
     }));
+
+    await this.redisService.getClient().set(
+      `workspaceMember:${workspaceId}`,
+       JSON.stringify(workspaceMembers),
+       'EX',
+       2
+      )
+
+    return workspaceMembers;
   }
 
   async changeMemberRole(
