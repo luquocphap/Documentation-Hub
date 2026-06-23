@@ -35,6 +35,7 @@ import {
   ActivityLogAction,
   type ActivityLogPayload,
 } from 'src/common/events/activity-log.event';
+import { RedisService } from 'src/modules-system/redis/redis.service';
 
 const DOCUMENT_CONTENT_EVENTS = {
   EXTRACT_PDF: 'document.content.extract.pdf',
@@ -70,6 +71,7 @@ export class DocumentService {
     private readonly pdfService: PdfService,
     private readonly documentContentExtractorService: DocumentContentExtractorService,
     private eventEmitter: EventEmitter2,
+    private readonly redisService: RedisService,
   ) {}
 
   private emitDocumentContentEvent(
@@ -442,6 +444,11 @@ export class DocumentService {
   }
 
   async findOne(documentId: string) {
+    const cachedDocument = await this.redisService.getClient().get(`document:${documentId}`);
+    if (cachedDocument) {
+      return JSON.parse(cachedDocument);
+    }
+
     const document = await this.documentModel
       .findOne({
         _id: new Types.ObjectId(documentId),
@@ -453,14 +460,23 @@ export class DocumentService {
       throw new NotFoundException('Tài liệu không tồn tại hoặc đã bị xóa');
     }
 
-    return {
+    const documentRes = {
       _id: document._id,
       workspaceId: document.workspaceId,
       title: document.title,
       public_id: document.public_id,
       createdAt: (document as any).created_at,
       updatedAt: (document as any).updated_at,
-    };
+    }
+
+    await this.redisService.getClient().set(
+      `document:${documentId}`,
+       JSON.stringify(documentRes),
+       'EX',
+        2
+      )
+
+    return documentRes;
   }
 
   async inviteMember(
