@@ -46,10 +46,13 @@ import {
 } from './modules-api/activity/schemas/actions.schema';
 import { ActivityActionSeeder } from './common/seeds/activity-action.seed';
 import { ActivityModule } from './modules-api/activity/activity.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { JobModule } from './modules-system/job/job.module';
 
 @Module({
   imports: [
     EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     AuthModule,
     TokenModule,
@@ -69,6 +72,7 @@ import { ActivityModule } from './modules-api/activity/activity.module';
     CommentModule,
     SearchModule,
     ActivityModule,
+    JobModule,
   ],
   controllers: [AppController],
   providers: [

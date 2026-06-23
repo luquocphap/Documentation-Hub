@@ -26,6 +26,19 @@ import {
   DocumentInvitationSchema,
 } from './schemas/document-invitation.schemas';
 import { User, UserSchema } from '../auth/schemas/user.schema';
+import {
+  DocumentComment,
+  DocumentCommentSchema,
+} from '../comment/schemas/document-comments.schema';
+import {
+  DocumentAnnotation,
+  DocumentAnnotationSchema,
+} from '../comment/schemas/document-annotations.schema';
+import {
+  CommentReply,
+  CommentReplySchema,
+} from '../comment/schemas/comment-replies.schema';
+import { DocumentPurgeService } from './document-purge.service';
 
 @Module({
   imports: [
@@ -37,11 +50,15 @@ import { User, UserSchema } from '../auth/schemas/user.schema';
       { name: WorkspaceMember.name, schema: WorkspaceMemberSchema },
       { name: DocumentInvitation.name, schema: DocumentInvitationSchema },
       { name: User.name, schema: UserSchema },
+      { name: DocumentComment.name, schema: DocumentCommentSchema },
+      { name: DocumentAnnotation.name, schema: DocumentAnnotationSchema },
+      { name: CommentReply.name, schema: CommentReplySchema },
     ]),
     CloudinaryModule,
     DocumentParserModule,
   ],
   controllers: [DocumentController],
-  providers: [DocumentService],
+  providers: [DocumentService, DocumentPurgeService],
+  exports: [DocumentPurgeService],
 })
 export class DocumentModule {}
