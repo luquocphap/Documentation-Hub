@@ -7,6 +7,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Types } from 'mongoose';
+import { RedisService } from 'src/modules-system/redis/redis.service';
 import { sendDocumentInvitationEmail } from 'src/common/email/send-document-invitation-email';
 import {
   ACTIVITY_LOG_EVENT,
@@ -100,6 +101,13 @@ describe('DocumentService', () => {
     emit: jest.Mock;
     emitAsync: jest.Mock;
   };
+  let redisClient: {
+    get: jest.Mock;
+    set: jest.Mock;
+  };
+  let redisService: {
+    getClient: jest.Mock;
+  };
 
   const mockedSendDocumentInvitationEmail =
     sendDocumentInvitationEmail as jest.Mock;
@@ -146,6 +154,13 @@ describe('DocumentService', () => {
       emit: jest.fn(),
       emitAsync: jest.fn().mockResolvedValue(undefined),
     };
+    redisClient = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue('OK'),
+    };
+    redisService = {
+      getClient: jest.fn().mockReturnValue(redisClient),
+    };
     mockedSendDocumentInvitationEmail.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
@@ -190,6 +205,10 @@ describe('DocumentService', () => {
         {
           provide: EventEmitter2,
           useValue: eventEmitter,
+        },
+        {
+          provide: RedisService,
+          useValue: redisService,
         },
       ],
     }).compile();
@@ -794,6 +813,27 @@ describe('DocumentService', () => {
   });
 
   describe('findOne', () => {
+    it('returns cached document metadata without querying MongoDB', async () => {
+      const documentId = new Types.ObjectId().toString();
+      const cachedDocument = {
+        _id: documentId,
+        workspaceId: new Types.ObjectId().toString(),
+        title: 'Cached Roadmap',
+        public_id: 'cached-pdf-id',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      redisClient.get.mockResolvedValue(JSON.stringify(cachedDocument));
+
+      await expect(service.findOne(documentId)).resolves.toEqual(
+        cachedDocument,
+      );
+
+      expect(redisClient.get).toHaveBeenCalledWith(`document:${documentId}`);
+      expect(documentModel.findOne).not.toHaveBeenCalled();
+      expect(redisClient.set).not.toHaveBeenCalled();
+    });
+
     it('returns document metadata', async () => {
       const documentId = new Types.ObjectId();
       const workspaceId = new Types.ObjectId();
@@ -819,6 +859,22 @@ describe('DocumentService', () => {
         createdAt,
         updatedAt,
       });
+      expect(redisClient.get).toHaveBeenCalledWith(
+        `document:${documentId.toString()}`,
+      );
+      expect(redisClient.set).toHaveBeenCalledWith(
+        `document:${documentId.toString()}`,
+        JSON.stringify({
+          _id: documentId,
+          workspaceId,
+          title: 'Roadmap',
+          public_id: 'pdf-id',
+          createdAt,
+          updatedAt,
+        }),
+        'EX',
+        2,
+      );
     });
 
     it('throws when the document does not exist', async () => {
