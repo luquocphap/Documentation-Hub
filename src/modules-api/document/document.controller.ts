@@ -7,11 +7,6 @@ import {
   Param,
   Delete,
   Query,
-  UseInterceptors,
-  UploadedFile,
-  ParseFilePipe,
-  MaxFileSizeValidator,
-  FileTypeValidator,
 } from '@nestjs/common';
 import { DocumentService } from './document.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
@@ -44,6 +39,7 @@ export class DocumentController {
   }
 
   @Post('from-markdown')
+  @Permissions('VIEW', 'WORKSPACE')
   createFromMarkdown(
     @Body() dto: CreateDocumentMarkdownDto,
     @CurrentUser() user: UserDocument,
@@ -52,6 +48,7 @@ export class DocumentController {
   }
 
   @Post()
+  @Permissions('VIEW', 'WORKSPACE')
   create(
     @Body() createDocumentDto: CreateDocumentDto,
     @CurrentUser() user: UserDocument,

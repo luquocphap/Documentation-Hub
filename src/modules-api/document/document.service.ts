@@ -94,6 +94,19 @@ export class DocumentService {
       );
   }
 
+  private async invalidateDocumentCache(documentId: string | Types.ObjectId) {
+    try {
+      await this.redisService
+        .getClient()
+        .del(`document:${documentId.toString()}`);
+    } catch (error) {
+      console.error(
+        '[DocumentCache] Failed to invalidate document cache',
+        error,
+      );
+    }
+  }
+
   private async saveExtractedContent(documentId: string, content: string) {
     await this.documentModel
       .findOneAndUpdate(
@@ -267,6 +280,7 @@ export class DocumentService {
         document.updatedAt = new Date();
         document.updatedBy = new Types.ObjectId(userId);
         await document.save();
+        await this.invalidateDocumentCache(documentId);
 
         // log update activity
         if (isUpdatingExistingFile) {
@@ -316,6 +330,7 @@ export class DocumentService {
 
     document.updatedBy = user._id as Types.ObjectId;
     await document.save();
+    await this.invalidateDocumentCache(documentId);
 
     this.emitActivityLogEvent({
       action: ActivityLogAction.UPDATE_DOCUMENT,
@@ -344,6 +359,8 @@ export class DocumentService {
     if (!document) {
       throw new NotFoundException('Tài liệu không tồn tại');
     }
+
+    await this.invalidateDocumentCache(documentId);
 
     this.emitActivityLogEvent({
       action: ActivityLogAction.DELETE_DOCUMENT,
@@ -428,6 +445,12 @@ export class DocumentService {
       joinedAt: new Date(),
     });
 
+    this.eventEmitter.emit('document.created', {
+      documentId: newDocument._id.toString(),
+      workspaceId: workspaceObjId.toString(),
+      ownerId: user._id.toString(),
+    });
+
     this.emitDocumentContentEvent(DOCUMENT_CONTENT_EVENTS.EXTRACT_MARKDOWN, {
       documentId: newDocument._id.toString(),
       markdownContent,
@@ -445,7 +468,9 @@ export class DocumentService {
   }
 
   async findOne(documentId: string) {
-    const cachedDocument = await this.redisService.getClient().get(`document:${documentId}`);
+    const cachedDocument = await this.redisService
+      .getClient()
+      .get(`document:${documentId}`);
     if (cachedDocument) {
       return JSON.parse(cachedDocument);
     }
@@ -468,14 +493,11 @@ export class DocumentService {
       public_id: document.public_id,
       createdAt: (document as any).created_at,
       updatedAt: (document as any).updated_at,
-    }
+    };
 
-    await this.redisService.getClient().set(
-      `document:${documentId}`,
-       JSON.stringify(documentRes),
-       'EX',
-        2
-      )
+    await this.redisService
+      .getClient()
+      .set(`document:${documentId}`, JSON.stringify(documentRes), 'EX', 2);
 
     return documentRes;
   }
@@ -791,7 +813,6 @@ export class DocumentService {
     };
   }
 
-
   // extract pdf content -> db
   @OnEvent(DOCUMENT_CONTENT_EVENTS.EXTRACT_PDF, { async: true })
   async handleExtractPdfContent(payload: ExtractPdfContentPayload) {
@@ -891,11 +912,13 @@ export class DocumentService {
     userId: string;
   }) {
     const { workspaceId, userId } = payload;
+    const workspaceObjectId = new Types.ObjectId(workspaceId);
+    const memberId = new Types.ObjectId(userId);
 
     // Lấy toàn bộ Document đang có trong Workspace đó
     const documents = await this.documentModel
       .find({
-        workspaceId: new Types.ObjectId(workspaceId),
+        workspaceId: workspaceObjectId,
         isDeleted: { $ne: true },
       })
       .select('_id')
@@ -904,22 +927,56 @@ export class DocumentService {
 
     if (documents.length === 0) return;
 
+    const workspaceMember = await this.workspaceMemberModel
+      .findOne({
+        workspaceId: workspaceObjectId,
+        userId: memberId,
+        isDeleted: { $ne: true },
+      })
+      .select('roleId')
+      .lean()
+      .exec();
+
+    if (!workspaceMember) return;
+
+    const documentRoleId =
+      workspaceMember.roleId.toString() === ROLE_IDS.ADMIN_WORKSPACE.toString()
+        ? DOCUMENT_ROLE_IDS.OWNER
+        : DOCUMENT_ROLE_IDS.EDITOR;
+
     // Chuẩn bị lệnh bulkWrite (Upsert) để chống lỗi Duplicate Key nếu họ đã từng có quyền
-    const bulkOps = documents.map((doc) => ({
-      updateOne: {
-        filter: { documentId: doc._id, userId: new Types.ObjectId(userId) },
-        update: {
-          $setOnInsert: {
+    const bulkOps = documents.flatMap((doc) => [
+      {
+        updateOne: {
+          filter: {
             documentId: doc._id,
-            userId: new Types.ObjectId(userId),
-            roleId: DOCUMENT_ROLE_IDS.EDITOR,
-            joinedAt: new Date(),
-            isDeleted: false,
+            userId: memberId,
+            isDeleted: true,
+          },
+          update: {
+            $set: {
+              roleId: documentRoleId,
+              isDeleted: false,
+            },
           },
         },
-        upsert: true,
       },
-    }));
+      {
+        updateOne: {
+          filter: { documentId: doc._id, userId: memberId },
+          update: {
+            $setOnInsert: {
+              documentId: doc._id,
+              userId: memberId,
+              roleId: documentRoleId,
+              joinedAt: new Date(),
+              isDeleted: false,
+            },
+          },
+          upsert: true,
+        },
+      },
+    ]);
 
     await this.documentMemberModel
       .bulkWrite(bulkOps)
