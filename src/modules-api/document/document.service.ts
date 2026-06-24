@@ -912,11 +912,13 @@ export class DocumentService {
     userId: string;
   }) {
     const { workspaceId, userId } = payload;
+    const workspaceObjectId = new Types.ObjectId(workspaceId);
+    const memberId = new Types.ObjectId(userId);
 
     // Lấy toàn bộ Document đang có trong Workspace đó
     const documents = await this.documentModel
       .find({
-        workspaceId: new Types.ObjectId(workspaceId),
+        workspaceId: workspaceObjectId,
         isDeleted: { $ne: true },
       })
       .select('_id')
@@ -925,8 +927,24 @@ export class DocumentService {
 
     if (documents.length === 0) return;
 
+    const workspaceMember = await this.workspaceMemberModel
+      .findOne({
+        workspaceId: workspaceObjectId,
+        userId: memberId,
+        isDeleted: { $ne: true },
+      })
+      .select('roleId')
+      .lean()
+      .exec();
+
+    if (!workspaceMember) return;
+
+    const documentRoleId =
+      workspaceMember.roleId.toString() === ROLE_IDS.ADMIN_WORKSPACE.toString()
+        ? DOCUMENT_ROLE_IDS.OWNER
+        : DOCUMENT_ROLE_IDS.EDITOR;
+
     // Chuẩn bị lệnh bulkWrite (Upsert) để chống lỗi Duplicate Key nếu họ đã từng có quyền
-    const memberId = new Types.ObjectId(userId);
     const bulkOps = documents.flatMap((doc) => [
       {
         updateOne: {
@@ -937,7 +955,7 @@ export class DocumentService {
           },
           update: {
             $set: {
-              roleId: DOCUMENT_ROLE_IDS.EDITOR,
+              roleId: documentRoleId,
               isDeleted: false,
             },
           },
@@ -950,7 +968,7 @@ export class DocumentService {
             $setOnInsert: {
               documentId: doc._id,
               userId: memberId,
-              roleId: DOCUMENT_ROLE_IDS.EDITOR,
+              roleId: documentRoleId,
               joinedAt: new Date(),
               isDeleted: false,
             },

@@ -1512,6 +1512,21 @@ describe('DocumentService', () => {
         userId: new Types.ObjectId().toString(),
       });
 
+      expect(workspaceMemberModel.findOne).not.toHaveBeenCalled();
+      expect(documentMemberModel.bulkWrite).not.toHaveBeenCalled();
+    });
+
+    it('skips bulk writes when the workspace membership is not active', async () => {
+      documentModel.find.mockReturnValue(
+        createQuery([{ _id: new Types.ObjectId() }]),
+      );
+      workspaceMemberModel.findOne.mockReturnValue(createQuery(null));
+
+      await service.handleWorkspaceMemberAdded({
+        workspaceId: new Types.ObjectId().toString(),
+        userId: new Types.ObjectId().toString(),
+      });
+
       expect(documentMemberModel.bulkWrite).not.toHaveBeenCalled();
     });
 
@@ -1524,6 +1539,9 @@ describe('DocumentService', () => {
 
       documentModel.find.mockReturnValue(
         createQuery([{ _id: firstDocumentId }, { _id: secondDocumentId }]),
+      );
+      workspaceMemberModel.findOne.mockReturnValue(
+        createQuery({ roleId: ROLE_IDS.MEMBER_WORKSPACE }),
       );
       documentMemberModel.bulkWrite.mockImplementation((ops: unknown) => {
         bulkOperations = ops as Array<Record<string, unknown>>;
@@ -1600,12 +1618,65 @@ describe('DocumentService', () => {
       expect(insertBulkOperation?.updateOne.upsert).toBe(true);
     });
 
+    it('upserts owner access for admins added to the workspace', async () => {
+      const workspaceId = new Types.ObjectId();
+      const userId = new Types.ObjectId();
+      const documentId = new Types.ObjectId();
+
+      documentModel.find.mockReturnValue(createQuery([{ _id: documentId }]));
+      workspaceMemberModel.findOne.mockReturnValue(
+        createQuery({ roleId: ROLE_IDS.ADMIN_WORKSPACE }),
+      );
+      documentMemberModel.bulkWrite.mockResolvedValue({});
+
+      await service.handleWorkspaceMemberAdded({
+        workspaceId: workspaceId.toString(),
+        userId: userId.toString(),
+      });
+
+      expect(documentMemberModel.bulkWrite).toHaveBeenCalledWith([
+        {
+          updateOne: {
+            filter: {
+              documentId,
+              userId,
+              isDeleted: true,
+            },
+            update: {
+              $set: {
+                roleId: DOCUMENT_ROLE_IDS.OWNER,
+                isDeleted: false,
+              },
+            },
+          },
+        },
+        {
+          updateOne: {
+            filter: { documentId, userId },
+            update: {
+              $setOnInsert: {
+                documentId,
+                userId,
+                roleId: DOCUMENT_ROLE_IDS.OWNER,
+                joinedAt: expect.any(Date),
+                isDeleted: false,
+              },
+            },
+            upsert: true,
+          },
+        },
+      ]);
+    });
+
     it('swallows bulk-write errors from the event handler', async () => {
       const consoleError = jest
         .spyOn(console, 'error')
         .mockImplementation(() => undefined);
       documentModel.find.mockReturnValue(
         createQuery([{ _id: new Types.ObjectId() }]),
+      );
+      workspaceMemberModel.findOne.mockReturnValue(
+        createQuery({ roleId: ROLE_IDS.MEMBER_WORKSPACE }),
       );
       documentMemberModel.bulkWrite.mockRejectedValue(new Error('bulk failed'));
 
