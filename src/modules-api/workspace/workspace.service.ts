@@ -421,6 +421,7 @@ export class WorkspaceService {
     );
   }
 
+  // avoid duplicate member
   private async ensureInvitedWorkspaceMember(payload: {
     workspaceId: Types.ObjectId;
     userId: Types.ObjectId;
