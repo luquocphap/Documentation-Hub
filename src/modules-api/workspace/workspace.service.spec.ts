@@ -15,6 +15,11 @@ import {
 } from 'src/common/events/activity-log.event';
 import { ROLE_IDS } from 'src/common/seeds/role.seed';
 import { User, type UserDocument } from '../auth/schemas/user.schema';
+import {
+  DocumentInvitation,
+  InvitationStatus as DocumentInvitationStatus,
+} from '../document/schemas/document-invitation.schemas';
+import { DocumentMember } from '../document/schemas/document-members.schema';
 import { DocumentModel } from '../document/schemas/documents.schema';
 import {
   InvitationStatus,
@@ -53,8 +58,10 @@ function createMockModel(): MockModel {
     findOneAndUpdate: jest.fn(),
     updateOne: jest.fn(),
     updateMany: jest.fn(),
+    deleteMany: jest.fn(),
     exists: jest.fn(),
     countDocuments: jest.fn(),
+    bulkWrite: jest.fn(),
   };
 }
 
@@ -66,6 +73,8 @@ describe('WorkspaceService', () => {
   let userModel: MockModel;
   let roleModel: MockModel;
   let documentModel: MockModel;
+  let documentMemberModel: MockModel;
+  let documentInvitationModel: MockModel;
   let eventEmitter: {
     emit: jest.Mock;
     emitAsync: jest.Mock;
@@ -73,6 +82,7 @@ describe('WorkspaceService', () => {
   let redisClient: {
     get: jest.Mock;
     set: jest.Mock;
+    del: jest.Mock;
   };
   let redisService: {
     getClient: jest.Mock;
@@ -106,6 +116,8 @@ describe('WorkspaceService', () => {
     userModel = createMockModel();
     roleModel = createMockModel();
     documentModel = createMockModel();
+    documentMemberModel = createMockModel();
+    documentInvitationModel = createMockModel();
     eventEmitter = {
       emit: jest.fn(),
       emitAsync: jest.fn().mockResolvedValue(undefined),
@@ -113,11 +125,27 @@ describe('WorkspaceService', () => {
     redisClient = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
     };
     redisService = {
       getClient: jest.fn().mockReturnValue(redisClient),
     };
     mockedSendWorkspaceInvitationEmail.mockResolvedValue(undefined);
+    documentModel.find.mockReturnValue(createQuery([]));
+    documentModel.deleteMany.mockReturnValue(createQuery({ deletedCount: 0 }));
+    invitationModel.updateMany.mockReturnValue(
+      createQuery({ modifiedCount: 0 }),
+    );
+    documentMemberModel.bulkWrite.mockResolvedValue({ modifiedCount: 0 });
+    documentMemberModel.deleteMany.mockReturnValue(
+      createQuery({ deletedCount: 0 }),
+    );
+    documentInvitationModel.updateMany.mockReturnValue(
+      createQuery({ modifiedCount: 0 }),
+    );
+    workspaceMemberModel.deleteMany.mockReturnValue(
+      createQuery({ deletedCount: 0 }),
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -145,6 +173,14 @@ describe('WorkspaceService', () => {
         {
           provide: getModelToken(DocumentModel.name),
           useValue: documentModel,
+        },
+        {
+          provide: getModelToken(DocumentMember.name),
+          useValue: documentMemberModel,
+        },
+        {
+          provide: getModelToken(DocumentInvitation.name),
+          useValue: documentInvitationModel,
         },
         {
           provide: EventEmitter2,
@@ -421,49 +457,61 @@ describe('WorkspaceService', () => {
   });
 
   describe('remove', () => {
-    it('soft deletes the workspace and all memberships', async () => {
+    it('soft deletes the workspace, hard deletes related records and cancels invitations', async () => {
       const workspaceId = new Types.ObjectId();
+      const documentId = new Types.ObjectId();
       const user = createUser();
-      let capturedMemberUpdate:
-        | {
-            filter: { workspaceId: Types.ObjectId };
-            update: {
-              $set: {
-                isDeleted: boolean;
-                deletedAt: Date;
-                deletedBy: Types.ObjectId;
-              };
-            };
-          }
-        | undefined;
 
       workspaceModel.findByIdAndUpdate.mockReturnValue(
         createQuery({ _id: workspaceId, isDeleted: true }),
       );
-      workspaceMemberModel.updateMany.mockImplementation(
-        (filter: unknown, update: unknown) => {
-          capturedMemberUpdate = {
-            filter: filter as { workspaceId: Types.ObjectId },
-            update: update as {
-              $set: {
-                isDeleted: boolean;
-                deletedAt: Date;
-                deletedBy: Types.ObjectId;
-              };
-            },
-          };
-          return createQuery({ modifiedCount: 2 });
-        },
+      documentModel.find.mockReturnValue(createQuery([{ _id: documentId }]));
+      documentModel.deleteMany.mockReturnValue(
+        createQuery({ deletedCount: 1 }),
+      );
+      workspaceMemberModel.deleteMany.mockReturnValue(
+        createQuery({ deletedCount: 2 }),
+      );
+      documentMemberModel.deleteMany.mockReturnValue(
+        createQuery({ deletedCount: 3 }),
       );
 
       await expect(
         service.remove(workspaceId.toString(), user),
       ).resolves.toHaveProperty('message');
 
-      expect(capturedMemberUpdate?.filter).toEqual({ workspaceId });
-      expect(capturedMemberUpdate?.update.$set.isDeleted).toBe(true);
-      expect(capturedMemberUpdate?.update.$set.deletedAt).toBeInstanceOf(Date);
-      expect(capturedMemberUpdate?.update.$set.deletedBy).toEqual(user._id);
+      expect(workspaceModel.findByIdAndUpdate).toHaveBeenCalledWith(
+        workspaceId.toString(),
+        expect.objectContaining({
+          isDeleted: true,
+          deletedAt: expect.any(Date),
+          deletedBy: user._id,
+        }),
+        { new: true },
+      );
+      expect(invitationModel.updateMany).toHaveBeenCalledWith(
+        {
+          workspaceId,
+          status: InvitationStatus.PENDING,
+        },
+        { $set: { status: InvitationStatus.CANCELED } },
+      );
+      expect(documentInvitationModel.updateMany).toHaveBeenCalledWith(
+        {
+          documentId: { $in: [documentId] },
+          status: DocumentInvitationStatus.PENDING,
+        },
+        { $set: { status: DocumentInvitationStatus.CANCELED } },
+      );
+      expect(documentMemberModel.deleteMany).toHaveBeenCalledWith({
+        documentId: { $in: [documentId] },
+      });
+      expect(documentModel.deleteMany).toHaveBeenCalledWith({
+        workspaceId,
+      });
+      expect(workspaceMemberModel.deleteMany).toHaveBeenCalledWith({
+        workspaceId,
+      });
     });
 
     it('throws when the workspace does not exist', async () => {
@@ -474,6 +522,8 @@ describe('WorkspaceService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
 
       expect(workspaceMemberModel.updateMany).not.toHaveBeenCalled();
+      expect(workspaceMemberModel.deleteMany).not.toHaveBeenCalled();
+      expect(documentModel.deleteMany).not.toHaveBeenCalled();
     });
   });
 
@@ -551,6 +601,24 @@ describe('WorkspaceService', () => {
           userId: new Types.ObjectId().toString(),
         }),
       ).resolves.toEqual({ status: 'unavailable' });
+    });
+
+    it('returns unavailable when the invitation was canceled', async () => {
+      const invitation = createInvitation({
+        status: InvitationStatus.CANCELED,
+      });
+      invitationModel.findOne.mockReturnValue(createQuery(invitation));
+
+      await expect(
+        service.acceptInvitationAfterEmailVerified({
+          invitationId: invitation._id as Types.ObjectId,
+          email: 'member@example.com',
+          userId: new Types.ObjectId().toString(),
+        }),
+      ).resolves.toEqual({ status: 'unavailable' });
+
+      expect(workspaceModel.findOne).not.toHaveBeenCalled();
+      expect(workspaceMemberModel.exists).not.toHaveBeenCalled();
     });
 
     it('expires a pending invitation that has passed its expiry time', async () => {

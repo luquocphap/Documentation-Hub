@@ -10,6 +10,7 @@ export enum InvitationStatus {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
   EXPIRED = 'EXPIRED',
+  CANCELED = 'CANCELED',
 }
 
 @Schema({
@@ -30,12 +31,23 @@ export class DocumentInvitation {
   @Prop({ type: Types.ObjectId, ref: User.name, required: true })
   inviterId!: Types.ObjectId;
 
-  @Prop({ type: String, enum: InvitationStatus, default: InvitationStatus.PENDING, index: true })
+  @Prop({
+    type: String,
+    enum: InvitationStatus,
+    default: InvitationStatus.PENDING,
+    index: true,
+  })
   status!: InvitationStatus;
 
-  @Prop({ required: true, default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), index: true })
+  @Prop({
+    required: true,
+    default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    index: true,
+  })
   expiresAt!: Date;
 }
 
-export const DocumentInvitationSchema = SchemaFactory.createForClass(DocumentInvitation);
+export const DocumentInvitationSchema =
+  SchemaFactory.createForClass(DocumentInvitation);
 DocumentInvitationSchema.index({ email: 1, documentId: 1, status: 1 });
+DocumentInvitationSchema.index({ documentId: 1, status: 1 });
