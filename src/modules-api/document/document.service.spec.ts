@@ -105,6 +105,7 @@ describe('DocumentService', () => {
   let redisClient: {
     get: jest.Mock;
     set: jest.Mock;
+    del: jest.Mock;
   };
   let redisService: {
     getClient: jest.Mock;
@@ -158,6 +159,7 @@ describe('DocumentService', () => {
     redisClient = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
     };
     redisService = {
       getClient: jest.fn().mockReturnValue(redisClient),
@@ -480,6 +482,9 @@ describe('DocumentService', () => {
       expect(document.updatedAt).toBeInstanceOf(Date);
       expect(document.updatedBy).toEqual(userId);
       expect(document.save).toHaveBeenCalled();
+      expect(redisClient.del).toHaveBeenCalledWith(
+        `document:${documentId.toString()}`,
+      );
       expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
         'document.content.extract.pdf',
         {
@@ -623,6 +628,7 @@ describe('DocumentService', () => {
   describe('update', () => {
     it('renames a document with a unique title and records updater', async () => {
       const workspaceId = new Types.ObjectId();
+      const documentId = new Types.ObjectId().toString();
       const user = createUser();
       const document = {
         workspaceId,
@@ -635,16 +641,13 @@ describe('DocumentService', () => {
       documentModel.find.mockReturnValue(createQuery([{ title: 'New title' }]));
 
       await expect(
-        service.update(
-          new Types.ObjectId().toString(),
-          { title: 'New title' },
-          user,
-        ),
+        service.update(documentId, { title: 'New title' }, user),
       ).resolves.toBe(document);
 
       expect(document.title).toBe('New title (1)');
       expect(document.updatedBy).toEqual(user._id);
       expect(document.save).toHaveBeenCalled();
+      expect(redisClient.del).toHaveBeenCalledWith(`document:${documentId}`);
     });
 
     it('keeps the title when it is unchanged', async () => {
@@ -695,6 +698,7 @@ describe('DocumentService', () => {
       await expect(service.remove(documentId, user)).resolves.toHaveProperty(
         'message',
       );
+      expect(redisClient.del).toHaveBeenCalledWith(`document:${documentId}`);
       expect(eventEmitter.emitAsync).toHaveBeenCalledWith(ACTIVITY_LOG_EVENT, {
         action: ActivityLogAction.DELETE_DOCUMENT,
         actorId: user._id.toString(),
@@ -784,6 +788,11 @@ describe('DocumentService', () => {
       expect(uploadedFile?.originalname).toBe('Guide.pdf');
       expect(uploadedFile?.mimetype).toBe('application/pdf');
       expect(uploadedFile?.buffer).toBe(pdfBuffer);
+      expect(eventEmitter.emit).toHaveBeenCalledWith('document.created', {
+        documentId: documentId.toString(),
+        workspaceId: workspaceId.toString(),
+        ownerId: user._id.toString(),
+      });
       expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
         'document.content.extract.markdown',
         {
@@ -1453,9 +1462,7 @@ describe('DocumentService', () => {
     it('does not insert when the owner is the only workspace member', async () => {
       const ownerId = new Types.ObjectId();
       workspaceMemberModel.find.mockReturnValue(
-        createQuery([
-          { userId: ownerId, roleId: ROLE_IDS.ADMIN_WORKSPACE },
-        ]),
+        createQuery([{ userId: ownerId, roleId: ROLE_IDS.ADMIN_WORKSPACE }]),
       );
 
       await service.handleDocumentCreated({
@@ -1528,8 +1535,25 @@ describe('DocumentService', () => {
         userId: userId.toString(),
       });
 
-      expect(bulkOperations).toHaveLength(2);
-      const firstBulkOperation = bulkOperations?.[0] as
+      expect(bulkOperations).toHaveLength(4);
+      const restoreBulkOperation = bulkOperations?.[0] as
+        | {
+            updateOne: {
+              filter: {
+                documentId: Types.ObjectId;
+                userId: Types.ObjectId;
+                isDeleted: boolean;
+              };
+              update: {
+                $set: {
+                  roleId: Types.ObjectId;
+                  isDeleted: boolean;
+                };
+              };
+            };
+          }
+        | undefined;
+      const insertBulkOperation = bulkOperations?.[1] as
         | {
             updateOne: {
               filter: {
@@ -1549,11 +1573,20 @@ describe('DocumentService', () => {
             };
           }
         | undefined;
-      expect(firstBulkOperation?.updateOne.filter).toEqual({
+      expect(restoreBulkOperation?.updateOne.filter).toEqual({
+        documentId: firstDocumentId,
+        userId,
+        isDeleted: true,
+      });
+      expect(restoreBulkOperation?.updateOne.update.$set).toEqual({
+        roleId: DOCUMENT_ROLE_IDS.EDITOR,
+        isDeleted: false,
+      });
+      expect(insertBulkOperation?.updateOne.filter).toEqual({
         documentId: firstDocumentId,
         userId,
       });
-      expect(firstBulkOperation?.updateOne.update.$setOnInsert).toEqual(
+      expect(insertBulkOperation?.updateOne.update.$setOnInsert).toEqual(
         expect.objectContaining({
           documentId: firstDocumentId,
           userId,
@@ -1562,9 +1595,9 @@ describe('DocumentService', () => {
         }),
       );
       expect(
-        firstBulkOperation?.updateOne.update.$setOnInsert.joinedAt,
+        insertBulkOperation?.updateOne.update.$setOnInsert.joinedAt,
       ).toBeInstanceOf(Date);
-      expect(firstBulkOperation?.updateOne.upsert).toBe(true);
+      expect(insertBulkOperation?.updateOne.upsert).toBe(true);
     });
 
     it('swallows bulk-write errors from the event handler', async () => {
