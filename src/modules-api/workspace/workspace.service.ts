@@ -29,6 +29,12 @@ import {
   type ActivityLogPayload,
 } from 'src/common/events/activity-log.event';
 import { RedisService } from 'src/modules-system/redis/redis.service';
+import { DocumentMember } from '../document/schemas/document-members.schema';
+import {
+  DocumentInvitation,
+  InvitationStatus as DocumentInvitationStatus,
+} from '../document/schemas/document-invitation.schemas';
+import { DOCUMENT_ROLE_IDS } from 'src/common/seeds/document-role.seed';
 
 export interface WorkspaceInvitationAcceptanceResult {
   status: 'accepted' | 'expired' | 'processed' | 'unavailable';
@@ -51,6 +57,10 @@ export class WorkspaceService {
     private readonly roleModel: Model<WorkspaceRole>,
     @InjectModel(DocumentModel.name)
     private readonly documentModel: Model<DocumentModel>,
+    @InjectModel(DocumentMember.name)
+    private readonly documentMemberModel: Model<DocumentMember>,
+    @InjectModel(DocumentInvitation.name)
+    private readonly documentInvitationModel: Model<DocumentInvitation>,
     private eventEmitter: EventEmitter2,
     private readonly redisService: RedisService,
   ) {}
@@ -61,6 +71,137 @@ export class WorkspaceService {
       .catch((error) =>
         console.error('[ActivityLog] Workspace event failed', error),
       );
+  }
+
+  private getWorkspaceMembersCacheKey(workspaceId: string | Types.ObjectId) {
+    return `workspaceMember:${workspaceId.toString()}`;
+  }
+
+  private async invalidateWorkspaceMembersCache(
+    workspaceId: string | Types.ObjectId,
+  ) {
+    try {
+      await this.redisService
+        .getClient()
+        .del(this.getWorkspaceMembersCacheKey(workspaceId));
+    } catch (error) {
+      console.error(
+        '[WorkspaceCache] Failed to invalidate members cache',
+        error,
+      );
+    }
+  }
+
+  private async invalidateDocumentCaches(documentIds: Types.ObjectId[]) {
+    if (documentIds.length === 0) return;
+
+    try {
+      await this.redisService
+        .getClient()
+        .del(
+          ...documentIds.map(
+            (documentId) => `document:${documentId.toString()}`,
+          ),
+        );
+    } catch (error) {
+      console.error(
+        '[WorkspaceCache] Failed to invalidate document cache',
+        error,
+      );
+    }
+  }
+
+  private getDocumentRoleIdFromWorkspaceRole(
+    workspaceRoleId: string | Types.ObjectId,
+  ) {
+    return workspaceRoleId.toString() === ROLE_IDS.ADMIN_WORKSPACE.toString()
+      ? DOCUMENT_ROLE_IDS.OWNER
+      : DOCUMENT_ROLE_IDS.EDITOR;
+  }
+
+  private async getWorkspaceDocumentIds(workspaceId: Types.ObjectId) {
+    const documents = (await this.documentModel
+      .find({ workspaceId })
+      .select('_id')
+      .lean()
+      .exec()) as Array<{ _id: Types.ObjectId }>;
+
+    return documents.map((document) => document._id);
+  }
+
+  private async syncDocumentAccessForWorkspaceMember(payload: {
+    workspaceId: Types.ObjectId;
+    userId: Types.ObjectId;
+    workspaceRoleId: string | Types.ObjectId;
+  }) {
+    const documents = (await this.documentModel
+      .find({
+        workspaceId: payload.workspaceId,
+        isDeleted: { $ne: true },
+      })
+      .select('_id createdBy')
+      .lean()
+      .exec()) as Array<{ _id: Types.ObjectId; createdBy?: Types.ObjectId }>;
+
+    if (documents.length === 0) return;
+
+    const workspaceDocumentRoleId = this.getDocumentRoleIdFromWorkspaceRole(
+      payload.workspaceRoleId,
+    );
+    const now = new Date();
+
+    await this.documentMemberModel.bulkWrite(
+      documents.map((document) => {
+        const isDocumentCreator =
+          document.createdBy?.toString() === payload.userId.toString();
+
+        return {
+          updateOne: {
+            filter: {
+              documentId: document._id,
+              userId: payload.userId,
+            },
+            update: {
+              $set: {
+                roleId: isDocumentCreator
+                  ? DOCUMENT_ROLE_IDS.OWNER
+                  : workspaceDocumentRoleId,
+                isDeleted: false,
+              },
+              $setOnInsert: {
+                documentId: document._id,
+                userId: payload.userId,
+                joinedAt: now,
+              },
+            },
+            upsert: true,
+          },
+        };
+      }),
+    );
+  }
+
+  private async revokeDocumentAccessForWorkspaceMember(payload: {
+    workspaceId: Types.ObjectId;
+    userId: Types.ObjectId;
+  }) {
+    const documentIds = await this.getWorkspaceDocumentIds(payload.workspaceId);
+    if (documentIds.length === 0) return;
+
+    await this.documentMemberModel
+      .updateMany(
+        {
+          documentId: { $in: documentIds },
+          userId: payload.userId,
+          isDeleted: { $ne: true },
+        },
+        {
+          $set: {
+            isDeleted: true,
+          },
+        },
+      )
+      .exec();
   }
 
   async create(createWorkspaceDto: CreateWorkspaceDto, user: UserDocument) {
@@ -79,6 +220,8 @@ export class WorkspaceService {
       workspaceName: newWorkspace.name,
       workspaceDescription: newWorkspace.description,
     });
+
+    await this.invalidateWorkspaceMembersCache(newWorkspace._id);
 
     this.eventEmitter.emit('workspace.member.added', {
       workspaceId: newWorkspace._id.toString(),
@@ -204,6 +347,8 @@ export class WorkspaceService {
           },
         )
         .exec();
+
+      await this.invalidateWorkspaceMembersCache(id);
     }
 
     if (!updatedWorkspace || updatedWorkspace.isDeleted) {
@@ -220,13 +365,16 @@ export class WorkspaceService {
   }
 
   async remove(id: string, user: UserDocument) {
+    const workspaceObjectId = new Types.ObjectId(id);
+    const now = new Date();
+
     // Xóa mềm Workspace
     const deletedWorkspace = await this.workspaceModel
       .findByIdAndUpdate(
         id,
         {
           isDeleted: true,
-          deletedAt: new Date(),
+          deletedAt: now,
           deletedBy: user._id,
         },
         { new: true },
@@ -237,21 +385,57 @@ export class WorkspaceService {
       throw new NotFoundException('Workspace không tồn tại');
     }
 
-    // Xóa mềm toàn bộ quan hệ Member-Workspace
-    await this.workspaceMemberModel
+    // Cancel active invitations and hard-delete workspace-related records.
+    const documentIds = await this.getWorkspaceDocumentIds(workspaceObjectId);
+
+    await this.invitationModel
       .updateMany(
         {
-          workspaceId: new Types.ObjectId(id),
+          workspaceId: workspaceObjectId,
+          status: InvitationStatus.PENDING,
         },
         {
           $set: {
-            isDeleted: true,
-            deletedAt: new Date(),
-            deletedBy: user._id,
+            status: InvitationStatus.CANCELED,
           },
         },
       )
       .exec();
+
+    if (documentIds.length > 0) {
+      await this.documentInvitationModel
+        .updateMany(
+          {
+            documentId: { $in: documentIds },
+            status: DocumentInvitationStatus.PENDING,
+          },
+          {
+            $set: {
+              status: DocumentInvitationStatus.CANCELED,
+            },
+          },
+        )
+        .exec();
+
+      await this.documentMemberModel
+        .deleteMany({
+          documentId: { $in: documentIds },
+        })
+        .exec();
+    }
+
+    await this.documentModel
+      .deleteMany({ workspaceId: workspaceObjectId })
+      .exec();
+
+    await this.workspaceMemberModel
+      .deleteMany({
+        workspaceId: workspaceObjectId,
+      })
+      .exec();
+
+    await this.invalidateWorkspaceMembersCache(workspaceObjectId);
+    await this.invalidateDocumentCaches(documentIds);
 
     return { message: 'Xóa workspace thành công' };
   }
@@ -300,6 +484,10 @@ export class WorkspaceService {
       return { status: 'unavailable' };
     }
 
+    if (invitation.status === InvitationStatus.CANCELED) {
+      return { status: 'unavailable' };
+    }
+
     const now = new Date();
     if (
       invitation.status === InvitationStatus.EXPIRED ||
@@ -345,6 +533,12 @@ export class WorkspaceService {
         return { status: 'processed' };
       }
 
+      await this.syncDocumentAccessForWorkspaceMember({
+        workspaceId: workspaceObjectId,
+        userId,
+        workspaceRoleId: invitation.roleId,
+      });
+      await this.invalidateWorkspaceMembersCache(workspaceObjectId);
       await this.syncWorkspaceMemberCount(workspaceObjectId);
       return {
         status: 'accepted',
@@ -398,6 +592,12 @@ export class WorkspaceService {
       return { status: 'processed' };
     }
 
+    await this.syncDocumentAccessForWorkspaceMember({
+      workspaceId: workspaceObjectId,
+      userId,
+      workspaceRoleId: invitation.roleId,
+    });
+    await this.invalidateWorkspaceMembersCache(workspaceObjectId);
     await this.syncWorkspaceMemberCount(workspaceObjectId);
     return {
       status: 'accepted',
@@ -421,6 +621,7 @@ export class WorkspaceService {
     );
   }
 
+  // avoid duplicate member
   private async ensureInvitedWorkspaceMember(payload: {
     workspaceId: Types.ObjectId;
     userId: Types.ObjectId;
@@ -551,6 +752,13 @@ export class WorkspaceService {
         )
         .exec();
 
+      await this.syncDocumentAccessForWorkspaceMember({
+        workspaceId: new Types.ObjectId(workspaceId),
+        userId: new Types.ObjectId(userExist._id),
+        workspaceRoleId: roleId,
+      });
+      await this.invalidateWorkspaceMembersCache(workspaceId);
+
       // Tăng số lượng member
       await this.workspaceModel.findByIdAndUpdate(workspaceId, {
         $inc: { memberCount: 1 },
@@ -642,7 +850,10 @@ export class WorkspaceService {
   }
 
   async getMembers(workspaceId: string) {
-    const cachedWorkspaceMember = await this.redisService.getClient().get(`workspaceMember:${workspaceId}`);
+    const cacheKey = this.getWorkspaceMembersCacheKey(workspaceId);
+    const cachedWorkspaceMember = await this.redisService
+      .getClient()
+      .get(cacheKey);
     if (cachedWorkspaceMember) {
       return JSON.parse(cachedWorkspaceMember);
     }
@@ -657,7 +868,6 @@ export class WorkspaceService {
       .sort({ joinedAt: 1 })
       .exec();
 
-    
     const workspaceMembers = members.map((m: any) => ({
       userId: m.userId._id,
       fullName: m.userId?.fullName,
@@ -667,12 +877,9 @@ export class WorkspaceService {
       joinedAt: m.joinedAt,
     }));
 
-    await this.redisService.getClient().set(
-      `workspaceMember:${workspaceId}`,
-       JSON.stringify(workspaceMembers),
-       'EX',
-       2
-      )
+    await this.redisService
+      .getClient()
+      .set(cacheKey, JSON.stringify(workspaceMembers), 'EX', 2);
 
     return workspaceMembers;
   }
@@ -710,6 +917,13 @@ export class WorkspaceService {
         'Không tìm thấy thành viên này trong Workspace hoặc thành viên đã bị xóa',
       );
     }
+
+    await this.syncDocumentAccessForWorkspaceMember({
+      workspaceId: new Types.ObjectId(workspaceId),
+      userId: new Types.ObjectId(userId),
+      workspaceRoleId: roleId,
+    });
+    await this.invalidateWorkspaceMembersCache(workspaceId);
 
     const targetUser = await this.userModel
       .findById(userId)
@@ -774,6 +988,8 @@ export class WorkspaceService {
       );
     }
 
+    const now = new Date();
+
     // Thực hiện xóa mềm trong bảng workspace_members
     const deletedMember = await this.workspaceMemberModel
       .findOneAndUpdate(
@@ -781,7 +997,7 @@ export class WorkspaceService {
         {
           $set: {
             isDeleted: true,
-            deletedAt: new Date(),
+            deletedAt: now,
             deletedBy: currentUser._id,
           },
         },
@@ -798,6 +1014,12 @@ export class WorkspaceService {
           { returnDocument: 'after' },
         )
         .exec();
+
+      await this.revokeDocumentAccessForWorkspaceMember({
+        workspaceId: new Types.ObjectId(workspaceId),
+        userId: new Types.ObjectId(userId),
+      });
+      await this.invalidateWorkspaceMembersCache(workspaceId);
     }
 
     const targetUser = await this.userModel
