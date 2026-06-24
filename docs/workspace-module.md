@@ -11,6 +11,7 @@ Its responsibilities include:
 - Inviting registered and unregistered users.
 - Completing invitation acceptance after email verification.
 - Maintaining the workspace member count.
+- Synchronizing workspace membership into document-level access.
 - Emitting activity-log and document-access events.
 
 The module is implemented with NestJS and MongoDB. It also uses Redis for
@@ -59,6 +60,8 @@ src/modules-api/workspace/
 - `WorkspaceRole`
 - `User`
 - `DocumentModel`
+- `DocumentMember`
+- `DocumentInvitation`
 
 The module exports `WorkspaceService` because the authentication module uses it
 to resolve and accept workspace invitations during email verification.
@@ -87,21 +90,21 @@ Roles are seeded with stable IDs.
 
 Permissions:
 
-| Action | Resource |
-| --- | --- |
-| `VIEW` | `WORKSPACE` |
-| `EDIT` | `WORKSPACE` |
+| Action   | Resource    |
+| -------- | ----------- |
+| `VIEW`   | `WORKSPACE` |
+| `EDIT`   | `WORKSPACE` |
 | `DELETE` | `WORKSPACE` |
-| `INVITE` | `MEMBER` |
-| `REMOVE` | `MEMBER` |
+| `INVITE` | `MEMBER`    |
+| `REMOVE` | `MEMBER`    |
 
 ### Member
 
 Permissions:
 
-| Action | Resource |
-| --- | --- |
-| `VIEW` | `WORKSPACE` |
+| Action    | Resource    |
+| --------- | ----------- |
+| `VIEW`    | `WORKSPACE` |
 | `COMMENT` | `WORKSPACE` |
 
 The current controller uses `EDIT / WORKSPACE` for changing roles and removing
@@ -110,18 +113,18 @@ Members.
 
 ## Endpoint Summary
 
-| Method | Endpoint | Required permission |
-| --- | --- | --- |
-| `GET` | `/api/workspace/roles` | Authenticated user |
-| `POST` | `/api/workspace` | Authenticated user |
-| `GET` | `/api/workspace` | Authenticated user |
-| `GET` | `/api/workspace/:workspaceId` | `VIEW / WORKSPACE` |
-| `PATCH` | `/api/workspace/:workspaceId` | `EDIT / WORKSPACE` |
-| `DELETE` | `/api/workspace/:workspaceId` | `DELETE / WORKSPACE` |
-| `GET` | `/api/workspace/:workspaceId/members` | `VIEW / WORKSPACE` |
-| `DELETE` | `/api/workspace/:workspaceId/members/:userId` | `EDIT / WORKSPACE` |
-| `POST` | `/api/workspace/:workspaceId/change-role` | `EDIT / WORKSPACE` |
-| `POST` | `/api/workspace/:workspaceId/invite` | `INVITE / MEMBER` |
+| Method   | Endpoint                                      | Required permission  |
+| -------- | --------------------------------------------- | -------------------- |
+| `GET`    | `/api/workspace/roles`                        | Authenticated user   |
+| `POST`   | `/api/workspace`                              | Authenticated user   |
+| `GET`    | `/api/workspace`                              | Authenticated user   |
+| `GET`    | `/api/workspace/:workspaceId`                 | `VIEW / WORKSPACE`   |
+| `PATCH`  | `/api/workspace/:workspaceId`                 | `EDIT / WORKSPACE`   |
+| `DELETE` | `/api/workspace/:workspaceId`                 | `DELETE / WORKSPACE` |
+| `GET`    | `/api/workspace/:workspaceId/members`         | `VIEW / WORKSPACE`   |
+| `DELETE` | `/api/workspace/:workspaceId/members/:userId` | `EDIT / WORKSPACE`   |
+| `POST`   | `/api/workspace/:workspaceId/change-role`     | `EDIT / WORKSPACE`   |
+| `POST`   | `/api/workspace/:workspaceId/invite`          | `INVITE / MEMBER`    |
 
 ## API Endpoints
 
@@ -291,15 +294,22 @@ Required permission:
 DELETE / WORKSPACE
 ```
 
-Deletion is soft:
+Workspace deletion uses mixed deletion semantics:
 
-- The workspace receives `isDeleted`, `deletedAt`, and `deletedBy`.
-- Every associated `WorkspaceMember` record receives the same deletion state.
+- The workspace itself is soft-deleted with `isDeleted`, `deletedAt`, and
+  `deletedBy`.
+- Pending workspace invitations are not soft-deleted. Their status is changed
+  to `CANCELED`.
+- Pending document invitations for documents in the workspace are also changed
+  to `CANCELED`.
+- `DocumentMember` records for documents in the workspace are hard-deleted.
+- Documents in the workspace are hard-deleted.
+- `WorkspaceMember` records for the workspace are hard-deleted.
+- Workspace member cache and affected document caches are invalidated.
 
 Response data contains a localized success message.
 
-This operation does not currently hard-delete the workspace, documents,
-invitations, or activity logs.
+This operation does not hard-delete the workspace record or activity logs.
 
 ### List workspace members
 
@@ -361,11 +371,18 @@ Behavior:
 
 1. Verifies that the requested workspace role exists.
 2. Updates the active membership record.
-3. Emits a `CHANGE_USER_ROLE` activity event containing the target email and
+3. Synchronizes document-level access for every active document in the
+   workspace.
+4. Invalidates the workspace member cache.
+5. Emits a `CHANGE_USER_ROLE` activity event containing the target email and
    new role.
 
-Changing a workspace role does not currently change the user's roles on
-existing documents.
+Document role mapping:
+
+- Workspace Admin maps to document Owner.
+- Other workspace roles map to document Editor.
+- The document creator remains document Owner even when the workspace role maps
+  to Editor.
 
 ### Remove a workspace member
 
@@ -389,10 +406,10 @@ When removal is allowed:
 
 1. The membership is soft-deleted.
 2. `memberCount` is decremented.
-3. A `REMOVE_USER` activity event is emitted.
-
-Member removal does not currently remove or soft-delete the user's
-document-level memberships.
+3. The user's `DocumentMember` records for documents in the workspace are
+   soft-deleted by setting `isDeleted`.
+4. The workspace member cache is invalidated.
+5. A `REMOVE_USER` activity event is emitted.
 
 ### Invite a member
 
@@ -424,10 +441,12 @@ If the email belongs to a verified user:
 
 1. The service rejects the request when the user is already an active member.
 2. An old soft-deleted membership is restored, or a new membership is created.
-3. The workspace `memberCount` is incremented.
-4. An email containing the workspace URL is sent.
-5. `workspace.member.added` is emitted.
-6. An `INVITE_USER` activity event is emitted.
+3. Document access is synchronized for active documents in the workspace.
+4. The workspace member cache is invalidated.
+5. The workspace `memberCount` is incremented.
+6. An email containing the workspace URL is sent.
+7. `workspace.member.added` is emitted.
+8. An `INVITE_USER` activity event is emitted.
 
 The user can access the workspace immediately.
 
@@ -452,9 +471,13 @@ Workspace invitations have these statuses:
 PENDING
 ACCEPTED
 EXPIRED
+CANCELED
 ```
 
 An invitation expires seven days after creation.
+
+`CANCELED` is used when a workspace is deleted. Invitations are kept as records
+with a final status instead of being soft-deleted.
 
 ### Registration lookup
 
@@ -465,6 +488,8 @@ It searches for an unexpired pending invitation matching:
 
 - The normalized registration email.
 - The workspace ID extracted from the validated internal redirect.
+
+Canceled invitations are not returned by this lookup.
 
 It returns the invitation ID and canonical redirect:
 
@@ -482,28 +507,87 @@ using invitation context stored on the verification-token record.
 
 Possible results:
 
-| Status | Meaning |
-| --- | --- |
-| `accepted` | The invitation is valid and an active membership exists |
-| `expired` | The invitation has expired |
-| `processed` | Another request processed it, or its final state is inconsistent |
-| `unavailable` | The invitation or workspace cannot be used |
+| Status        | Meaning                                                          |
+| ------------- | ---------------------------------------------------------------- |
+| `accepted`    | The invitation is valid and an active membership exists          |
+| `expired`     | The invitation has expired                                       |
+| `processed`   | Another request processed it, or its final state is inconsistent |
+| `unavailable` | The invitation or workspace cannot be used                       |
 
 Acceptance behavior:
 
 1. Verifies the invitation ID and invited email.
-2. Marks expired pending invitations as `EXPIRED`.
-3. Confirms that the workspace still exists and is active.
-4. Claims a pending invitation with a conditional status update.
-5. Creates, restores, or reuses the workspace membership.
-6. Rolls the invitation back to `PENDING` if membership creation throws.
-7. Recalculates `memberCount` from active membership records.
-8. Returns the workspace redirect.
+2. Returns `unavailable` for canceled invitations.
+3. Marks expired pending invitations as `EXPIRED`.
+4. Confirms that the workspace still exists and is active.
+5. Claims a pending invitation with a conditional status update.
+6. Creates, restores, or reuses the workspace membership.
+7. Synchronizes document access for the accepted member.
+8. Invalidates the workspace member cache.
+9. Rolls the invitation back to `PENDING` if membership creation throws.
+10. Recalculates `memberCount` from active membership records.
+11. Returns the workspace redirect.
 
 The conditional invitation update and membership checks make this flow
 idempotent under repeated verification requests.
 
-## Document Access Integration
+## Supporting Mechanisms
+
+### Document access synchronization
+
+Workspace membership is mirrored into document-level access so that workspace
+members can access existing documents without waiting for a document event.
+
+The service synchronizes document access when:
+
+- A verified user is added directly to a workspace.
+- A pending workspace invitation is accepted after email verification.
+- A workspace member's role changes.
+
+For every active document in the workspace, the service upserts a
+`DocumentMember` record:
+
+- Workspace Admin becomes document Owner.
+- Other workspace roles become document Editor.
+- The document creator stays document Owner.
+- A previously soft-deleted document membership is restored by setting
+  `isDeleted` to `false`.
+
+When a workspace member is removed, their document memberships for documents in
+that workspace are soft-deleted by setting `isDeleted` to `true`.
+
+During workspace deletion, document memberships for the workspace's documents
+are hard-deleted because the documents themselves are hard-deleted.
+
+### Cache invalidation
+
+The member-list endpoint uses Redis for short-lived caching. In addition to the
+two-second TTL, the service explicitly invalidates:
+
+- `workspaceMember:<workspaceId>` after workspace creation, workspace settings
+  update, member add, invitation acceptance, role change, member removal, and
+  workspace deletion.
+- `document:<documentId>` for documents affected by workspace deletion.
+
+Cache invalidation is best-effort. Redis deletion failures are logged and do
+not fail the original workspace operation.
+
+### Invitation cancellation
+
+Workspace and document invitations are not soft-deleted by workspace deletion.
+Pending invitations are moved to `CANCELED`.
+
+This preserves invitation history while preventing later registration or email
+verification flows from granting access to a deleted workspace.
+
+### Activity logging
+
+Workspace operations emit the shared `activity.log` event.
+
+Activity logging is asynchronous. Logging failures are written to the console
+without failing the original workspace request.
+
+## Document Access Events
 
 The module emits:
 
@@ -531,18 +615,13 @@ The event is emitted when:
 
 ## Activity Log Integration
 
-Workspace operations emit the shared `activity.log` event.
-
-| Operation | Activity action |
-| --- | --- |
-| Create workspace | `WORKSPACE_CREATION` |
-| Update workspace settings | `UPDATE_SETTINGS` |
-| Invite or directly add user | `INVITE_USER` |
-| Change member role | `CHANGE_USER_ROLE` |
-| Remove member | `REMOVE_USER` |
-
-Activity logging is asynchronous. Logging failures are written to the console
-without failing the original workspace request.
+| Operation                   | Activity action      |
+| --------------------------- | -------------------- |
+| Create workspace            | `WORKSPACE_CREATION` |
+| Update workspace settings   | `UPDATE_SETTINGS`    |
+| Invite or directly add user | `INVITE_USER`        |
+| Change member role          | `CHANGE_USER_ROLE`   |
+| Remove member               | `REMOVE_USER`        |
 
 ## Persistence
 
@@ -554,16 +633,16 @@ Collection:
 workspaces
 ```
 
-| Field | Description |
-| --- | --- |
-| `name` | Required workspace name, maximum 60 characters |
-| `description` | Optional description, maximum 255 characters |
-| `memberCount` | Stored count of active members |
-| `isDeleted` | Soft-deletion flag |
-| `deletedAt` | Soft-deletion timestamp |
-| `deletedBy` | User who deleted the workspace |
-| `created_at` | Creation timestamp |
-| `updated_at` | Update timestamp |
+| Field         | Description                                    |
+| ------------- | ---------------------------------------------- |
+| `name`        | Required workspace name, maximum 60 characters |
+| `description` | Optional description, maximum 255 characters   |
+| `memberCount` | Stored count of active members                 |
+| `isDeleted`   | Soft-deletion flag                             |
+| `deletedAt`   | Soft-deletion timestamp                        |
+| `deletedBy`   | User who deleted the workspace                 |
+| `created_at`  | Creation timestamp                             |
+| `updated_at`  | Update timestamp                               |
 
 Indexes exist for workspace name and descending creation time.
 
@@ -575,17 +654,17 @@ Collection:
 workspace_members
 ```
 
-| Field | Description |
-| --- | --- |
-| `workspaceId` | Workspace reference |
-| `userId` | User reference |
-| `roleId` | Workspace role reference |
-| `joinedAt` | Membership creation or restoration time |
-| `workspaceName` | Denormalized workspace name |
-| `workspaceDescription` | Denormalized workspace description |
-| `isDeleted` | Soft-deletion flag |
-| `deletedAt` | Soft-deletion timestamp |
-| `deletedBy` | User who removed the membership |
+| Field                  | Description                             |
+| ---------------------- | --------------------------------------- |
+| `workspaceId`          | Workspace reference                     |
+| `userId`               | User reference                          |
+| `roleId`               | Workspace role reference                |
+| `joinedAt`             | Membership creation or restoration time |
+| `workspaceName`        | Denormalized workspace name             |
+| `workspaceDescription` | Denormalized workspace description      |
+| `isDeleted`            | Soft-deletion flag                      |
+| `deletedAt`            | Soft-deletion timestamp                 |
+| `deletedBy`            | User who removed the membership         |
 
 An active user can have only one membership per workspace. The unique index is
 partial and applies when `isDeleted` is `false`.
@@ -617,17 +696,18 @@ Collection:
 workspace_invitations
 ```
 
-| Field | Description |
-| --- | --- |
-| `email` | Normalized invited email |
-| `workspaceId` | Target workspace |
-| `roleId` | Role assigned after acceptance |
-| `inviterId` | User who sent the invitation |
-| `status` | `PENDING`, `ACCEPTED`, or `EXPIRED` |
-| `expiresAt` | Expiration time, seven days by default |
-| `invitedAt` | Creation timestamp |
+| Field         | Description                                     |
+| ------------- | ----------------------------------------------- |
+| `email`       | Normalized invited email                        |
+| `workspaceId` | Target workspace                                |
+| `roleId`      | Role assigned after acceptance                  |
+| `inviterId`   | User who sent the invitation                    |
+| `status`      | `PENDING`, `ACCEPTED`, `EXPIRED`, or `CANCELED` |
+| `expiresAt`   | Expiration time, seven days by default          |
+| `invitedAt`   | Creation timestamp                              |
 
 A compound index supports lookups by email, workspace, and invitation status.
+Another index supports workspace/status scans for cancellation.
 Duplicate active invitations are prevented by service-level checks.
 
 ## Cache
@@ -640,26 +720,30 @@ workspaceMember:<workspaceId>
 
 The cached JSON response expires after two seconds.
 
+The service also invalidates this key explicitly after membership-affecting
+operations.
+
 ## Configuration
 
 The workspace module depends on:
 
-| Environment variable | Purpose |
-| --- | --- |
-| `APP_URL` | Builds workspace links included in invitation emails |
-| `RESEND_API_KEY` | Authenticates email delivery |
-| `RESEND_FROM_EMAIL` | Invitation email sender |
-| `REDIS_URL` | Provides member-list caching |
-| `DATABASE_URL` | MongoDB connection |
+| Environment variable | Purpose                                              |
+| -------------------- | ---------------------------------------------------- |
+| `APP_URL`            | Builds workspace links included in invitation emails |
+| `RESEND_API_KEY`     | Authenticates email delivery                         |
+| `RESEND_FROM_EMAIL`  | Invitation email sender                              |
+| `REDIS_URL`          | Provides member-list caching                         |
+| `DATABASE_URL`       | MongoDB connection                                   |
 
 ## Current Constraints
 
-- Workspaces and memberships are soft-deleted; there is no restore endpoint.
-- Workspace deletion does not cascade to documents or invitations.
-- Removing a workspace member does not revoke document-level memberships.
-- Changing a workspace role does not propagate a corresponding document role.
-- The member list can be stale for up to two seconds because it relies on TTL rather than explicit cache invalidation.
-
+- Workspaces are soft-deleted; there is no restore endpoint.
+- Workspace deletion hard-deletes documents and membership records, but it does
+  not remove activity logs.
+- Accepted and expired invitations are kept as historical records. Only pending
+  invitations are canceled during workspace deletion.
+- Member-list cache invalidation is best-effort; if Redis deletion fails, stale
+  data can remain until the two-second TTL expires.
 
 ## Related Source Files
 
