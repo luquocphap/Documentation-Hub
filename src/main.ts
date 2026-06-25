@@ -28,10 +28,6 @@ async function bootstrap() {
   })
 
   const PORT = 3069;
-  app.enableCors({
-    origin: 'http://localhost:5173',
-    credentials: true,
-  });
   await app.listen(PORT, () => {
     console.log(`[SUCCESS] BE started successfully at http://localhost:${PORT}`)
   });

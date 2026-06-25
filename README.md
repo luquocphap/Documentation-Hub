@@ -4,9 +4,9 @@
 
 Module-level documentation lives in [`docs/`](./docs):
 
-- [Auth module](./docs/workspace-module.md)
-- [Document module](./docs/search-module.md)
-- [Comment module](./docs/activity-module.md)
+- [Auth module](./docs/auth-module.md)
+- [Document module](./docs/document-module.md)
+- [Comment module](./docs/comment-module.md)
 - [Workspace module](./docs/workspace-module.md)
 - [Search module](./docs/search-module.md)
 - [Activity module](./docs/activity-module.md)
