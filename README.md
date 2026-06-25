@@ -80,6 +80,8 @@ docker compose up -d
 This builds and starts the backend (and its dependencies, such as MongoDB
 and Redis) in the background.
 
+Access to [SwaggerUI](http://localhost:3069/api/docs) page.
+
 ### Notes
 
 - The ngrok URL changes every time you restart the tunnel unless you are on
