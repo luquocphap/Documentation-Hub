@@ -65,7 +65,7 @@ set the public URL printed by ngrok in step 2 to the relevant variable(s),
 for example:
 
 ```env
-APP_URL=<YOUR PUBLIC URL>
+BACKEND_URL=<YOUR PUBLIC URL>
 ```
 
 Refer to each module's documentation for any additional environment
